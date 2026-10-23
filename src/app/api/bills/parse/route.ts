@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth";
 import { dbService } from "@/db";
 import { parseBillImage } from "@/lib/bill-parser";
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();

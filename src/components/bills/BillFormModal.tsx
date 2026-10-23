@@ -228,9 +228,9 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       const formData = new FormData();
       formData.append("file", file);
 
-      // Client abort controller with 7.5 second timeout
+      // Client abort controller with 25 second timeout for vision AI
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7500);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
 
       const res = await fetch("/api/bills/parse", {
         method: "POST",
