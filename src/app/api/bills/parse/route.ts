@@ -19,7 +19,10 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const settings = await dbService.getSettings();
-    const explicitApiKey = (formData.get("geminiApiKey") as string) || (settings as any).geminiApiKey;
+    const explicitApiKey =
+      (formData.get("geminiApiKey") as string) ||
+      (settings as any)?.geminiApiKey ||
+      (settings as any)?.gemini_api_key;
 
     const parsed = await parseBillImage(buffer, file.type, explicitApiKey);
 

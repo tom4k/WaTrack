@@ -132,18 +132,25 @@ export async function parseBillImage(
   const apiKey =
     explicitApiKey ||
     process.env.GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY;
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    process.env.GEMINI_KEY ||
+    process.env.GOOGLE_AI_API_KEY ||
+    process.env.API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (apiKey) {
     try {
       const result = await parseWithGemini(buffer, mimeType, apiKey);
       if (result) return result;
-    } catch (err) {
-      console.warn("Gemini Vision AI parsing failed, falling back to local OCR:", err);
+    } catch (err: any) {
+      console.error("Gemini Vision AI parsing failed:", err);
+      // If user configured an API key, throw clean error instead of hanging on slow Tesseract
+      throw new Error(`Gemini AI scan failed: ${err.message || "Invalid API key or response"}`);
     }
   }
 
-  // Fallback to Tesseract OCR
+  // Fallback to Tesseract OCR if no API key is set
   return await parseWithTesseract(buffer);
 }
 
@@ -155,11 +162,11 @@ async function parseWithGemini(
   const ai = new GoogleGenAI({ apiKey });
   const base64Data = buffer.toString("base64");
 
-  // Attempt with gemini-2.5-flash, fallback to gemini-1.5-flash
+  // Attempt with gemini-2.0-flash, fallback to gemini-1.5-flash
   let rawText = "";
   try {
     const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         {
           role: "user",
@@ -178,7 +185,8 @@ async function parseWithGemini(
       ],
     });
     rawText = res.text || "";
-  } catch {
+  } catch (err) {
+    console.warn("gemini-2.0-flash failed, trying gemini-1.5-flash...", err);
     const res = await ai.models.generateContent({
       model: "gemini-1.5-flash",
       contents: [
