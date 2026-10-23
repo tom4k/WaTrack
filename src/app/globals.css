@@ -72,15 +72,31 @@ body {
 
 /* Thermal paper styling for KSEB spot bill replica */
 .thermal-receipt {
-  background: #fffdf5;
-  color: #1a1a1a;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  font-family: "Courier New", Courier, monospace;
+  background-color: #fffdf5 !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  height: auto !important;
+  min-height: -webkit-fit-content;
+  min-height: -moz-fit-content;
+  min-height: fit-content;
+  display: block;
+  overflow: visible;
 }
 
 .dark .thermal-receipt {
-  background: #fffdf5;
-  color: #111111;
+  background-color: #fffdf5 !important;
+  color: #111827 !important;
+}
+
+.thermal-tear-top {
+  background: radial-gradient(circle at 10px -5px, transparent 12px, #fffdf5 13px) repeat-x;
+  background-size: 20px 20px;
+}
+
+.thermal-tear-bottom {
+  background: radial-gradient(circle at 10px 25px, transparent 12px, #fffdf5 13px) repeat-x;
+  background-size: 20px 20px;
 }
 
 /* Print view */
