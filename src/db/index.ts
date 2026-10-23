@@ -145,8 +145,10 @@ async function ensurePgSchema(): Promise<void> {
           currency TEXT DEFAULT 'INR' NOT NULL,
           timezone TEXT DEFAULT 'Asia/Kolkata' NOT NULL,
           due_reminder_days INTEGER DEFAULT 5 NOT NULL,
+          gemini_api_key TEXT,
           updated_at TEXT NOT NULL
         );
+        ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gemini_api_key TEXT;
       `);
       pgSchemaEnsured = true;
     } catch (err) {
@@ -277,9 +279,14 @@ function getSqliteDb(): DatabaseSync {
       currency TEXT DEFAULT 'INR' NOT NULL,
       timezone TEXT DEFAULT 'Asia/Kolkata' NOT NULL,
       due_reminder_days INTEGER DEFAULT 5 NOT NULL,
+      gemini_api_key TEXT,
       updated_at TEXT NOT NULL
     );
   `);
+
+  try {
+    sqliteDb.exec("ALTER TABLE app_settings ADD COLUMN gemini_api_key TEXT;");
+  } catch {}
 
   // Auto-seed only in non-production if explicitly requested via AUTO_SEED=true
   const shouldAutoSeed =
@@ -558,6 +565,40 @@ export const dbService = {
 
   async getConsumerById(id: string) {
     const row = await dbQueryOne<any>("SELECT * FROM consumers WHERE id = ? LIMIT 1", [id]);
+    if (!row) return null;
+    return {
+      id: row.id,
+      consumerNumber: row.consumer_number,
+      consumerId: row.consumer_id,
+      name: row.name,
+      address: row.address,
+      phone: row.phone,
+      sectionName: row.section_name,
+      sectionPhone: row.section_phone,
+      tariff: row.tariff,
+      purpose: row.purpose,
+      category: row.category,
+      connectedLoad: row.connected_load,
+      phase: row.phase,
+      postNumber: row.post_number,
+      transformer: row.transformer,
+      meterSerialNumber: row.meter_serial_number,
+      meterStatus: row.meter_status,
+      multiplyingFactor: row.multiplying_factor,
+      securityDeposit: row.security_deposit,
+      isDefault: Boolean(Number(row.is_default)),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  async getConsumerByNumber(num: string) {
+    if (!num) return null;
+    const clean = String(num).trim();
+    const row = await dbQueryOne<any>(
+      "SELECT * FROM consumers WHERE consumer_number = ? OR consumer_id = ? LIMIT 1",
+      [clean, clean]
+    );
     if (!row) return null;
     return {
       id: row.id,
@@ -944,21 +985,24 @@ export const dbService = {
       currency: row.currency,
       timezone: row.timezone,
       dueReminderDays: Number(row.due_reminder_days ?? row.dueReminderDays ?? 5),
+      geminiApiKey: row.gemini_api_key || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null,
+      hasGeminiApiKey: Boolean(row.gemini_api_key || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
     };
   },
 
-  async updateSettings(data: { householdName?: string; currency?: string; timezone?: string; dueReminderDays?: number }) {
+  async updateSettings(data: { householdName?: string; currency?: string; timezone?: string; dueReminderDays?: number; geminiApiKey?: string | null }) {
     const current = await this.getSettings();
     const now = new Date().toISOString();
     await dbExecute(`
       UPDATE app_settings SET
-        household_name = ?, currency = ?, timezone = ?, due_reminder_days = ?, updated_at = ?
+        household_name = ?, currency = ?, timezone = ?, due_reminder_days = ?, gemini_api_key = ?, updated_at = ?
       WHERE id = ?
     `, [
       data.householdName ?? current.householdName,
       data.currency ?? current.currency,
       data.timezone ?? current.timezone,
       data.dueReminderDays ?? current.dueReminderDays,
+      data.geminiApiKey !== undefined ? data.geminiApiKey : (current as any).geminiApiKey,
       now,
       current.id
     ]);

@@ -1,7 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Upload, FileText, Check, AlertCircle, RefreshCw, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Upload,
+  Camera,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Receipt,
+  MapPin,
+  Calendar,
+  Zap,
+  FileText,
+  Image as ImageIcon,
+} from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
@@ -15,12 +30,22 @@ interface BillFormModalProps {
 }
 
 export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: BillFormModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [consumers, setConsumers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form State
+  // Scan & Autofill States
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<any | null>(null);
+  const [showManualFields, setShowManualFields] = useState(false);
+
+  // Form State (Autofilled from Photo)
   const [consumerId, setConsumerId] = useState("");
+  const [consumerData, setConsumerData] = useState<any | null>(null);
+
   const [billNumber, setBillNumber] = useState("");
   const [billArea, setBillArea] = useState("B02/15/114");
   const [billDate, setBillDate] = useState("");
@@ -58,11 +83,9 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
   const [payableAmount, setPayableAmount] = useState("");
   const [remarks, setRemarks] = useState("");
 
-  // File Attachment
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  // Load consumers and initialize fields
+  // Load existing consumers
   useEffect(() => {
+    if (!open) return;
     fetch("/api/consumers")
       .then((res) => res.json())
       .then((data) => {
@@ -70,16 +93,18 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
           setConsumers(data.consumers);
           if (!consumerId && data.defaultConsumer) {
             setConsumerId(data.defaultConsumer.id);
-          } else if (!consumerId && data.consumers.length > 0) {
-            setConsumerId(data.consumers[0].id);
           }
         }
       })
       .catch(() => {});
-  }, [consumerId]);
+  }, [open, consumerId]);
 
+  // Handle Edit vs New initialization
   useEffect(() => {
+    if (!open) return;
+
     if (billToEdit) {
+      setShowManualFields(true);
       setConsumerId(billToEdit.consumerId || "");
       setBillNumber(billToEdit.billNumber || "");
       setBillArea(billToEdit.billArea || "B02/15/114");
@@ -115,110 +140,107 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       setPayableAmount(billToEdit.payableAmount || "");
       setRemarks(billToEdit.remarks || "");
     } else {
-      // Default dates for new bill entry
-      const now = new Date();
-      const todayStr = now.toISOString().split("T")[0];
-      setBillDate(todayStr);
-
-      // Due date +10 days
-      const due = new Date(now);
-      due.setDate(due.getDate() + 10);
-      setDueDate(due.toISOString().split("T")[0]);
-
-      // Disconnection date +26 days
-      const disconn = new Date(now);
-      disconn.setDate(disconn.getDate() + 26);
-      setDisconnectionDate(disconn.toISOString().split("T")[0]);
-
-      // Current reading date = today, previous = ~60 days ago
-      setCurrentReadingDate(todayStr);
-      const prev = new Date(now);
-      prev.setDate(prev.getDate() - 61);
-      setPreviousReadingDate(prev.toISOString().split("T")[0]);
+      // Reset for new photo upload
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      setScanResult(null);
+      setShowManualFields(false);
+      setError(null);
+      setConsumerData(null);
     }
-  }, [billToEdit]);
+  }, [open, billToEdit]);
 
-  // Auto-calculate consumed units for Normal, OffPeak, Peak
-  const handleCalculateUnits = () => {
-    const pNorm = parseFloat(prevReadingNormal);
-    const cNorm = parseFloat(currReadingNormal);
-    const uNorm = !isNaN(pNorm) && !isNaN(cNorm) ? Math.max(0, cNorm - pNorm) : parseFloat(consumedUnitsNormal) || 0;
+  // Handle Photo Upload and Trigger Scanning
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const pOff = parseFloat(prevReadingOffPeak);
-    const cOff = parseFloat(currReadingOffPeak);
-    const uOff = !isNaN(pOff) && !isNaN(cOff) ? Math.max(0, cOff - pOff) : parseFloat(consumedUnitsOffPeak) || 0;
+    setSelectedFile(file);
+    setError(null);
 
-    const pPeak = parseFloat(prevReadingPeak);
-    const cPeak = parseFloat(currReadingPeak);
-    const uPeak = !isNaN(pPeak) && !isNaN(cPeak) ? Math.max(0, cPeak - pPeak) : parseFloat(consumedUnitsPeak) || 0;
-
-    setConsumedUnitsNormal(uNorm > 0 ? String(uNorm) : consumedUnitsNormal);
-    setConsumedUnitsOffPeak(uOff > 0 ? String(uOff) : consumedUnitsOffPeak);
-    setConsumedUnitsPeak(uPeak > 0 ? String(uPeak) : consumedUnitsPeak);
-
-    const sum = uNorm + uOff + uPeak;
-    if (sum > 0) {
-      setTotalUnits(String(sum));
+    // Create preview
+    if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      setPreviewUrl(null);
     }
+
+    // Auto-scan photo
+    await scanBillPhoto(file);
   };
 
-  // Auto calculate duty (10% of energy charge) and total charges
-  const handleAutoSumCharges = () => {
-    const ec = parseFloat(energyCharge) || 0;
-    // Duty is typically 10%
-    const computedDuty = toDecimal2(ec * 0.1);
-    if (!duty || duty === "0" || duty === "0.00") {
-      setDuty(computedDuty.toFixed(2));
+  const scanBillPhoto = async (file: File) => {
+    setScanning(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/bills/parse", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to parse bill photo");
+
+      setScanResult(data);
+
+      // Autofill Bill Fields
+      if (data.bill) {
+        const b = data.bill;
+        setBillNumber(b.billNumber || "");
+        setBillArea(b.billArea || "B02/15/114");
+        setBillDate(b.billDate || "");
+        setDueDate(b.dueDate || "");
+        setDisconnectionDate(b.disconnectionDate || "");
+        setReadingTime(b.readingTime || "");
+        setPreviousReadingDate(b.previousReadingDate || "");
+        setCurrentReadingDate(b.currentReadingDate || "");
+        setBillingCycleDays(b.billingCycleDays || 60);
+
+        setPrevReadingNormal(b.prevReadingNormal || "");
+        setCurrReadingNormal(b.currReadingNormal || "");
+        setConsumedUnitsNormal(b.consumedUnitsNormal || "");
+
+        setPrevReadingOffPeak(b.prevReadingOffPeak || "");
+        setCurrReadingOffPeak(b.currReadingOffPeak || "");
+        setConsumedUnitsOffPeak(b.consumedUnitsOffPeak || "");
+
+        setPrevReadingPeak(b.prevReadingPeak || "");
+        setCurrReadingPeak(b.currReadingPeak || "");
+        setConsumedUnitsPeak(b.consumedUnitsPeak || "");
+
+        setTotalUnits(b.totalUnits || "");
+        setEnergyCharge(b.energyCharge || "");
+        setDuty(b.duty || "");
+        setFuelSurcharge(b.fuelSurcharge || "");
+        setFixedCharge(b.fixedCharge || "500.00");
+        setMeterRent(b.meterRent || "30.00");
+        setRoundOff(b.roundOff || "0.00");
+        setArrears(b.arrears || "0.00");
+        setTotalAmount(b.totalAmount || "");
+        setPayableAmount(b.payableAmount || b.totalAmount || "");
+        setRemarks(b.remarks || "");
+      }
+
+      // Handle Consumer Matching or Auto-Registration
+      if (data.consumerExists && data.matchedConsumer) {
+        setConsumerId(data.matchedConsumer.id);
+        setConsumerData(null);
+      } else if (data.consumer) {
+        setConsumerId("new");
+        setConsumerData(data.consumer);
+      }
+    } catch (err: any) {
+      console.error("Scan error:", err);
+      setError(err.message || "Failed to scan photo. You can enter details manually.");
+      setShowManualFields(true);
+    } finally {
+      setScanning(false);
     }
-
-    const d = parseFloat(duty) || computedDuty;
-    const fs = parseFloat(fuelSurcharge) || 0;
-    const fc = parseFloat(fixedCharge) || 500;
-    const mr = parseFloat(meterRent) || 30;
-    const ro = parseFloat(roundOff) || 0;
-    const ar = parseFloat(arrears) || 0;
-
-    const sum = toDecimal2(ec + d + fs + fc + mr + ro + ar);
-    setTotalAmount(sum.toFixed(2));
-    setPayableAmount(sum.toFixed(2));
-  };
-
-  // Prefill with sample bill values button
-  const handleLoadSampleFromBill = () => {
-    setBillNumber("5624261012132");
-    setBillArea("B02/15/114");
-    setBillDate("2026-10-17");
-    setDueDate("2026-10-27");
-    setDisconnectionDate("2026-11-12");
-    setReadingTime("18/10/2026 11:29:59 AM");
-    setPreviousReadingDate("2026-08-17");
-    setCurrentReadingDate("2026-10-17");
-    setBillingCycleDays(61);
-
-    setPrevReadingNormal("3227");
-    setCurrReadingNormal("3575");
-    setConsumedUnitsNormal("402");
-
-    setPrevReadingOffPeak("3851");
-    setCurrReadingOffPeak("4177");
-    setConsumedUnitsOffPeak("322");
-
-    setPrevReadingPeak("410");
-    setCurrReadingPeak("422");
-    setConsumedUnitsPeak("28");
-
-    setTotalUnits("752");
-
-    setEnergyCharge("4971.92");
-    setDuty("497.19");
-    setFuelSurcharge("20.58");
-    setFixedCharge("500.00");
-    setMeterRent("30.00");
-    setRoundOff("0.31");
-    setArrears("0.00");
-    setTotalAmount("6020.00");
-    setPayableAmount("6020.00");
-    setRemarks("Auto Recovery FS Demand @0.03 Paise/unit (KSERC Tariff Amendment Regulation dtd 29-05-2023)");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,21 +249,20 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
     setLoading(true);
 
     try {
-      if (!consumerId) throw new Error("Please select a consumer");
-      if (!billNumber) throw new Error("Please enter bill number");
-      if (!totalUnits) throw new Error("Please enter total units consumed");
-      if (!payableAmount) throw new Error("Please enter payable amount");
+      if (!billNumber) throw new Error("Please enter or scan a valid Bill Number");
+      if (!payableAmount && !totalAmount) throw new Error("Please enter or scan the Payable Amount");
 
-      const payload = {
-        consumerId,
+      const payload: any = {
+        consumerId: consumerId !== "new" ? consumerId : undefined,
+        consumerData: consumerData || undefined,
         billNumber,
-        billArea,
-        billDate,
-        dueDate,
+        billArea: billArea || "B02/15/114",
+        billDate: billDate || new Date().toISOString().split("T")[0],
+        dueDate: dueDate || new Date(Date.now() + 10 * 86400000).toISOString().split("T")[0],
         disconnectionDate: disconnectionDate || null,
         readingTime: readingTime || null,
-        previousReadingDate,
-        currentReadingDate,
+        previousReadingDate: previousReadingDate || new Date(Date.now() - 60 * 86400000).toISOString().split("T")[0],
+        currentReadingDate: currentReadingDate || billDate || new Date().toISOString().split("T")[0],
         billingCycleDays: Number(billingCycleDays || 60),
         isBiMonthly: true,
         prevReadingNormal: prevReadingNormal ? parseFloat(prevReadingNormal) : null,
@@ -253,7 +274,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         prevReadingPeak: prevReadingPeak ? parseFloat(prevReadingPeak) : null,
         currReadingPeak: currReadingPeak ? parseFloat(currReadingPeak) : null,
         consumedUnitsPeak: consumedUnitsPeak ? parseFloat(consumedUnitsPeak) : null,
-        totalUnits: parseFloat(totalUnits),
+        totalUnits: parseFloat(totalUnits || "0"),
         energyCharge: parseFloat(energyCharge || "0"),
         duty: parseFloat(duty || "0"),
         fuelSurcharge: parseFloat(fuelSurcharge || "0"),
@@ -261,8 +282,8 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         meterRent: parseFloat(meterRent || "0"),
         roundOff: parseFloat(roundOff || "0"),
         arrears: parseFloat(arrears || "0"),
-        totalAmount: parseFloat(totalAmount || payableAmount),
-        payableAmount: parseFloat(payableAmount),
+        totalAmount: parseFloat(totalAmount || payableAmount || "0"),
+        payableAmount: parseFloat(payableAmount || totalAmount || "0"),
         remarks: remarks || null,
       };
 
@@ -280,531 +301,428 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         body: formData,
       });
 
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || "Failed to save bill");
-      }
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to save bill");
 
       onSuccess();
+      onOpenChange(false);
     } catch (err: any) {
-      setError(err.message || "An error occurred");
+      setError(err.message || "Failed to record bill");
     } finally {
       setLoading(false);
     }
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} size="xl">
-      <DialogHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <DialogTitle>{billToEdit ? "Edit KSEB Electricity Bill" : "Record New KSEB Electricity Bill"}</DialogTitle>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Enter bill particulars matching the spot demand/disconnection notice
-            </p>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <div className="max-w-2xl max-h-[90vh] overflow-y-auto pr-1">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="h-5 w-5 text-emerald-500" />
+            <span>{billToEdit ? "Edit Electricity Bill" : "Record New KSEB Bill"}</span>
+          </DialogTitle>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {billToEdit
+              ? "Update electricity bill records and payment thresholds"
+              : "Upload or take a photo of your KSEB spot bill. Details will be autofilled and consumer profile created automatically."}
+          </p>
+        </DialogHeader>
+
+        {error && (
+          <div className="mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+          {/* PHOTO-FIRST DROPZONE (Shown for new bills) */}
           {!billToEdit && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleLoadSampleFromBill}
-              className="mr-8 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-            >
-              Autofill Sample Bill
-            </Button>
-          )}
-        </div>
-      </DialogHeader>
-
-      {error && (
-        <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center gap-2 text-rose-700 dark:text-rose-400 text-xs">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto pr-1">
-        {/* Section 1: Consumer & Bill Identity */}
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            1. Consumer & Bill Identification
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="consumerId">KSEB Consumer *</Label>
-              <Select
-                id="consumerId"
-                value={consumerId}
-                onChange={(e) => setConsumerId(e.target.value)}
-                required
-                className="mt-1"
-              >
-                {consumers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.consumerNumber})
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="billNumber">Bill Number (ബിൽ നം) *</Label>
-              <Input
-                id="billNumber"
-                value={billNumber}
-                onChange={(e) => setBillNumber(e.target.value)}
-                placeholder="e.g. 5624261012132"
-                required
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="billArea">Bill Area (ബിൽ ഏരിയ)</Label>
-              <Input
-                id="billArea"
-                value={billArea}
-                onChange={(e) => setBillArea(e.target.value)}
-                placeholder="e.g. B02/15/114"
-                className="mt-1 font-mono"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 2: Important Dates */}
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            2. Billing Period & Due Dates (Asia/Kolkata)
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="billDate">Bill Date (ബിൽ തീയതി) *</Label>
-              <Input
-                id="billDate"
-                type="date"
-                value={billDate}
-                onChange={(e) => setBillDate(e.target.value)}
-                required
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="dueDate" className="text-rose-600 dark:text-rose-400">
-                Due Date Without Fine (പിഴ തീയതി) *
-              </Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                required
-                className="mt-1 border-rose-300 dark:border-rose-900/60"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="disconnectionDate">Disconnection Date (വിച്ഛേദന തീയതി)</Label>
-              <Input
-                id="disconnectionDate"
-                type="date"
-                value={disconnectionDate}
-                onChange={(e) => setDisconnectionDate(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="previousReadingDate">Previous Reading Date *</Label>
-              <Input
-                id="previousReadingDate"
-                type="date"
-                value={previousReadingDate}
-                onChange={(e) => setPreviousReadingDate(e.target.value)}
-                required
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="currentReadingDate">Current Reading Date *</Label>
-              <Input
-                id="currentReadingDate"
-                type="date"
-                value={currentReadingDate}
-                onChange={(e) => setCurrentReadingDate(e.target.value)}
-                required
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="readingTime">Reading Time</Label>
-              <Input
-                id="readingTime"
-                value={readingTime}
-                onChange={(e) => setReadingTime(e.target.value)}
-                placeholder="18/10/2026 11:29:59 AM"
-                className="mt-1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 3: TOD Meter Readings & Units */}
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              3. Time-Of-Day (TOD) Readings & Consumption
-            </h4>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCalculateUnits}
-              className="text-xs h-7 gap-1"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Compute Units
-            </Button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500">
-                  <th className="pb-2">TOD Tariff Zone</th>
-                  <th className="pb-2">Previous Reading</th>
-                  <th className="pb-2">Current Reading</th>
-                  <th className="pb-2">Consumed Units (kWh)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800">
-                <tr>
-                  <td className="py-2 font-medium">Normal - KWH(NL)</td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={prevReadingNormal}
-                      onChange={(e) => setPrevReadingNormal(e.target.value)}
-                      placeholder="e.g. 3227"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={currReadingNormal}
-                      onChange={(e) => setCurrReadingNormal(e.target.value)}
-                      placeholder="e.g. 3575"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={consumedUnitsNormal}
-                      onChange={(e) => setConsumedUnitsNormal(e.target.value)}
-                      placeholder="e.g. 402"
-                      className="h-8 font-mono font-bold"
-                    />
-                  </td>
-                </tr>
-
-                <tr>
-                  <td className="py-2 font-medium">Off-Peak - KWH(OP)</td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={prevReadingOffPeak}
-                      onChange={(e) => setPrevReadingOffPeak(e.target.value)}
-                      placeholder="e.g. 3851"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={currReadingOffPeak}
-                      onChange={(e) => setCurrReadingOffPeak(e.target.value)}
-                      placeholder="e.g. 4177"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={consumedUnitsOffPeak}
-                      onChange={(e) => setConsumedUnitsOffPeak(e.target.value)}
-                      placeholder="e.g. 322"
-                      className="h-8 font-mono font-bold"
-                    />
-                  </td>
-                </tr>
-
-                <tr>
-                  <td className="py-2 font-medium">Peak - KWH(PK)</td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={prevReadingPeak}
-                      onChange={(e) => setPrevReadingPeak(e.target.value)}
-                      placeholder="e.g. 410"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2 pr-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={currReadingPeak}
-                      onChange={(e) => setCurrReadingPeak(e.target.value)}
-                      placeholder="e.g. 422"
-                      className="h-8 font-mono"
-                    />
-                  </td>
-                  <td className="py-2">
-                    <Input
-                      type="number"
-                      step="any"
-                      value={consumedUnitsPeak}
-                      onChange={(e) => setConsumedUnitsPeak(e.target.value)}
-                      placeholder="e.g. 28"
-                      className="h-8 font-mono font-bold"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="pt-2 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
-            <span className="text-xs font-bold">Total Consumed Units (ആകെ ഉപയോഗിച്ച യൂണിറ്റ്) *</span>
-            <div className="w-48">
-              <Input
-                type="number"
-                step="any"
-                value={totalUnits}
-                onChange={(e) => setTotalUnits(e.target.value)}
-                placeholder="752"
-                required
-                className="font-mono font-black text-emerald-600 dark:text-emerald-400"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 4: Charges Breakdown */}
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              4. Charges Breakdown (ബിൽ വിവരങ്ങൾ - INR ₹)
-            </h4>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAutoSumCharges}
-              className="text-xs h-7 gap-1"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Sum Charges
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <Label htmlFor="energyCharge">Energy Charge (₹)</Label>
-              <Input
-                id="energyCharge"
-                type="number"
-                step="0.01"
-                value={energyCharge}
-                onChange={(e) => setEnergyCharge(e.target.value)}
-                placeholder="4971.92"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="duty">Electricity Duty (₹)</Label>
-              <Input
-                id="duty"
-                type="number"
-                step="0.01"
-                value={duty}
-                onChange={(e) => setDuty(e.target.value)}
-                placeholder="497.19"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="fuelSurcharge">Fuel Surcharge (₹)</Label>
-              <Input
-                id="fuelSurcharge"
-                type="number"
-                step="0.01"
-                value={fuelSurcharge}
-                onChange={(e) => setFuelSurcharge(e.target.value)}
-                placeholder="20.58"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="fixedCharge">Fixed Charge (₹)</Label>
-              <Input
-                id="fixedCharge"
-                type="number"
-                step="0.01"
-                value={fixedCharge}
-                onChange={(e) => setFixedCharge(e.target.value)}
-                placeholder="500.00"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="meterRent">Meter Rent (₹)</Label>
-              <Input
-                id="meterRent"
-                type="number"
-                step="0.01"
-                value={meterRent}
-                onChange={(e) => setMeterRent(e.target.value)}
-                placeholder="30.00"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="roundOff">Round Off (₹)</Label>
-              <Input
-                id="roundOff"
-                type="number"
-                step="0.01"
-                value={roundOff}
-                onChange={(e) => setRoundOff(e.target.value)}
-                placeholder="0.31"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="arrears">Arrears / Dues (₹)</Label>
-              <Input
-                id="arrears"
-                type="number"
-                step="0.01"
-                value={arrears}
-                onChange={(e) => setArrears(e.target.value)}
-                placeholder="0.00"
-                className="mt-1 font-mono"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="payableAmount" className="font-bold text-emerald-600 dark:text-emerald-400">
-                Payable Amount (₹) *
-              </Label>
-              <Input
-                id="payableAmount"
-                type="number"
-                step="0.01"
-                value={payableAmount}
-                onChange={(e) => {
-                  setPayableAmount(e.target.value);
-                  setTotalAmount(e.target.value);
-                }}
-                placeholder="6020.00"
-                required
-                className="mt-1 font-mono font-bold text-base border-emerald-500"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Section 5: Document Attachment & Remarks */}
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            5. PDF Attachment & Remarks
-          </h4>
-
-          <div>
-            <Label htmlFor="file">Upload Original Bill (PDF / Scan / Photo)</Label>
-            <div className="mt-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-4 text-center hover:border-emerald-500 dark:hover:border-emerald-500 transition-colors">
+            <div className="space-y-3">
               <input
-                id="file"
+                ref={fileInputRef}
                 type="file"
-                accept=".pdf,image/png,image/jpeg,image/webp"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setSelectedFile(e.target.files[0]);
-                  }
-                }}
+                accept="image/*,application/pdf"
+                capture="environment"
+                onChange={handleFileChange}
                 className="hidden"
               />
-              <label htmlFor="file" className="cursor-pointer flex flex-col items-center gap-1.5">
-                <Upload className="h-6 w-6 text-slate-400" />
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                  {selectedFile ? selectedFile.name : "Click to select PDF or image file"}
-                </span>
-                <span className="text-[10px] text-slate-400">PDF, JPG, PNG or WEBP up to 10MB</span>
-              </label>
-              {selectedFile && (
-                <div className="mt-2 flex items-center justify-center gap-2">
-                  <span className="text-xs text-slate-600 dark:text-slate-300 font-mono">
-                    {(selectedFile.size / 1024).toFixed(1)} KB
+
+              {!selectedFile ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-8 border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10 rounded-2xl cursor-pointer text-center transition-all group"
+                >
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    <div className="h-12 w-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10 group-hover:scale-105 transition-transform">
+                      <Camera className="h-6 w-6" />
+                    </div>
+                    <div className="h-12 w-12 rounded-2xl bg-teal-100 dark:bg-teal-950/80 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-lg shadow-teal-500/10 group-hover:scale-105 transition-transform">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                    Take a Photo or Upload KSEB Spot Bill Slip
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    Click to capture with mobile camera or drag & drop JPG, PNG, or PDF notice.
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-3 px-3 py-1 rounded-full bg-emerald-100/70 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Auto-detects meter readings & adds consumer
                   </span>
-                  <button
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="Bill slip" className="h-14 w-14 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shadow" />
+                    ) : (
+                      <div className="h-14 w-14 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center">
+                        <FileText className="h-7 w-7" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px] sm:max-w-xs">
+                        {selectedFile.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.type || "Document"}
+                      </p>
+                      {scanning && (
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5 mt-1 animate-pulse">
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                          Scanning KSEB bill slip with AI Vision...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
                     type="button"
-                    onClick={() => setSelectedFile(null)}
-                    className="text-rose-500 hover:text-rose-600 text-xs"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={scanning}
+                    className="text-xs shrink-0"
                   >
-                    Remove
-                  </button>
+                    Change Photo
+                  </Button>
                 </div>
               )}
             </div>
+          )}
+
+          {/* AUTOFILLED SUMMARY CARD */}
+          {scanResult && !scanning && (
+            <div className="space-y-3">
+              {/* Consumer Match or Auto-Add Banner */}
+              {scanResult.consumerExists ? (
+                <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                        Matched Consumer: {scanResult.matchedConsumer?.name}
+                      </span>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono">
+                        No: {scanResult.matchedConsumer?.consumerNumber} • {scanResult.matchedConsumer?.tariff} • {scanResult.matchedConsumer?.sectionName}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-200/80 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                    Existing Profile
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-slate-900/40 border border-emerald-500/50 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 animate-bounce" />
+                    <div>
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        New Consumer Detected (Will be auto-added)
+                      </span>
+                      <p className="text-[11px] text-slate-300 font-mono">
+                        {consumerData?.name} • No: {consumerData?.consumerNumber} ({consumerData?.tariff})
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-emerald-600 text-white shadow">
+                    Auto-Register
+                  </span>
+                </div>
+              )}
+
+              {/* Extracted Bill Quick Highlights */}
+              <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/70 backdrop-blur-sm space-y-3">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/70 dark:border-slate-800">
+                  <div>
+                    <span className="text-[11px] font-mono text-slate-500 block uppercase">Payable Amount</span>
+                    <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      {formatINR(payableAmount || totalAmount || "0")}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-mono text-slate-500 block uppercase">Bill Number</span>
+                    <span className="text-sm font-bold font-mono text-slate-800 dark:text-slate-200">
+                      {billNumber}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase">Bill Date</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{billDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase">Due Date</span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">{dueDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase">Disconnection</span>
+                    <span className="font-semibold text-rose-600 dark:text-rose-400">{disconnectionDate || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block uppercase">Total Units</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{totalUnits} kWh</span>
+                  </div>
+                </div>
+
+                {(consumedUnitsNormal || consumedUnitsOffPeak || consumedUnitsPeak) && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>TOD Normal: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsNormal || "0"}u</strong></span>
+                    <span>Off-Peak: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsOffPeak || "0"}u</strong></span>
+                    <span>Peak: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsPeak || "0"}u</strong></span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TOGGLE TO REVIEW / EDIT ALL FIELDS */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setShowManualFields(!showManualFields)}
+              className="text-xs font-semibold text-slate-500 hover:text-emerald-500 flex items-center gap-1.5 transition-colors"
+            >
+              {showManualFields ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              <span>{showManualFields ? "Hide detailed form fields" : "Review or edit extracted fields (optional)"}</span>
+            </button>
           </div>
 
-          <div>
-            <Label htmlFor="remarks">Remarks / Demand Notes</Label>
-            <Textarea
-              id="remarks"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="e.g. Auto Recovery FS Demand @0.03 Paise/unit..."
-              rows={2}
-              className="mt-1"
-            />
-          </div>
-        </div>
+          {/* DETAILED EDITABLE FIELDS (Collapsed by default in photo mode) */}
+          {showManualFields && (
+            <div className="space-y-4 pt-3 border-t border-slate-200/80 dark:border-slate-800">
+              {/* Consumer Selection if manual override */}
+              <div>
+                <Label htmlFor="consumer">Assigned KSEB Consumer</Label>
+                <Select
+                  id="consumer"
+                  value={consumerId}
+                  onChange={(e) => {
+                    setConsumerId(e.target.value);
+                    if (e.target.value !== "new") setConsumerData(null);
+                  }}
+                  className="mt-1"
+                >
+                  {consumerData && (
+                    <option value="new">
+                      ✨ Auto-Register New Consumer: {consumerData.name} ({consumerData.consumerNumber})
+                    </option>
+                  )}
+                  {consumers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {c.consumerNumber} ({c.tariff})
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading} className="gap-2">
-            {loading ? "Saving..." : billToEdit ? "Update Bill" : "Save Bill Entry"}
-          </Button>
-        </DialogFooter>
-      </form>
+              {/* Bill Number & Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor="billNumber">Bill Number</Label>
+                  <Input
+                    id="billNumber"
+                    value={billNumber}
+                    onChange={(e) => setBillNumber(e.target.value)}
+                    required
+                    className="mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="billDate">Bill Date</Label>
+                  <Input
+                    id="billDate"
+                    type="date"
+                    value={billDate}
+                    onChange={(e) => setBillDate(e.target.value)}
+                    required
+                    className="mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dueDate">Due Date</Label>
+                  <Input
+                    id="dueDate"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    required
+                    className="mt-1 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Reading Dates & Billing Cycle */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor="prevDate">Previous Reading Date</Label>
+                  <Input
+                    id="prevDate"
+                    type="date"
+                    value={previousReadingDate}
+                    onChange={(e) => setPreviousReadingDate(e.target.value)}
+                    required
+                    className="mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="currDate">Current Reading Date</Label>
+                  <Input
+                    id="currDate"
+                    type="date"
+                    value={currentReadingDate}
+                    onChange={(e) => setCurrentReadingDate(e.target.value)}
+                    required
+                    className="mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="disconnDate">Disconnection Date</Label>
+                  <Input
+                    id="disconnDate"
+                    type="date"
+                    value={disconnectionDate}
+                    onChange={(e) => setDisconnectionDate(e.target.value)}
+                    className="mt-1 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Time-Of-Day (TOD) Readings */}
+              <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                  Time-Of-Day (TOD) Meter Readings
+                </span>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <Label className="text-[11px]">Normal (6 AM - 6 PM)</Label>
+                    <Input
+                      value={consumedUnitsNormal}
+                      onChange={(e) => setConsumedUnitsNormal(e.target.value)}
+                      placeholder="Units"
+                      className="mt-1 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">Off-Peak (10 PM - 6 AM)</Label>
+                    <Input
+                      value={consumedUnitsOffPeak}
+                      onChange={(e) => setConsumedUnitsOffPeak(e.target.value)}
+                      placeholder="Units"
+                      className="mt-1 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[11px]">Peak (6 PM - 10 PM)</Label>
+                    <Input
+                      value={consumedUnitsPeak}
+                      onChange={(e) => setConsumedUnitsPeak(e.target.value)}
+                      placeholder="Units"
+                      className="mt-1 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <Label htmlFor="totalUnits">Total Consumed Units (kWh)</Label>
+                    <Input
+                      id="totalUnits"
+                      value={totalUnits}
+                      onChange={(e) => setTotalUnits(e.target.value)}
+                      required
+                      className="mt-1 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="payableAmount">Payable Amount (₹)</Label>
+                    <Input
+                      id="payableAmount"
+                      value={payableAmount}
+                      onChange={(e) => setPayableAmount(e.target.value)}
+                      required
+                      className="mt-1 font-mono font-bold text-emerald-600 dark:text-emerald-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Charges Breakdown */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div>
+                  <Label className="text-[10px]">Energy Charge</Label>
+                  <Input value={energyCharge} onChange={(e) => setEnergyCharge(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Electricity Duty</Label>
+                  <Input value={duty} onChange={(e) => setDuty(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Fuel Surcharge</Label>
+                  <Input value={fuelSurcharge} onChange={(e) => setFuelSurcharge(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Fixed Charge</Label>
+                  <Input value={fixedCharge} onChange={(e) => setFixedCharge(e.target.value)} className="mt-1" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading || scanning}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={loading || scanning || (!selectedFile && !billToEdit)}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-lg shadow-emerald-600/20"
+            >
+              {loading ? (
+                "Saving Record..."
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span>
+                    {consumerData ? "Confirm & Auto-Register Consumer" : "Confirm & Save Bill"}
+                  </span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </div>
     </Dialog>
   );
 }

@@ -73,6 +73,56 @@ export async function POST(req: NextRequest) {
       data = await req.json();
     }
 
+    // Automatically resolve or register consumer if missing or provided from bill scan
+    if (!data.consumerId || data.consumerId === "new" || data.consumerData) {
+      const c = data.consumerData || {};
+      let targetConsumer = null;
+
+      if (c.consumerNumber) {
+        targetConsumer = await dbService.getConsumerByNumber(c.consumerNumber);
+      }
+      if (!targetConsumer && data.consumerNumber) {
+        targetConsumer = await dbService.getConsumerByNumber(data.consumerNumber);
+      }
+
+      if (!targetConsumer && (c.consumerNumber || c.name || !data.consumerId)) {
+        // Consumer details not found in system: automatically add that consumer!
+        const allConsumers = await dbService.getConsumers();
+        const isDefault = allConsumers.length === 0;
+
+        targetConsumer = await dbService.createConsumer({
+          consumerNumber: c.consumerNumber || data.consumerNumber || `115624${Date.now().toString().slice(-7)}`,
+          consumerId: c.consumerId || null,
+          name: c.name || data.consumerName || "KSEB Consumer",
+          address: c.address || null,
+          phone: c.phone || null,
+          sectionName: c.sectionName || data.sectionName || "KSEB Electrical Section",
+          sectionPhone: c.sectionPhone || null,
+          tariff: c.tariff || data.tariff || "LT-1 Dom",
+          purpose: c.purpose || "Domestic",
+          category: c.category || "DOMESTIC",
+          connectedLoad: c.connectedLoad || "10 kW",
+          phase: c.phase || "3 Phase",
+          postNumber: c.postNumber || null,
+          transformer: c.transformer || null,
+          meterSerialNumber: c.meterSerialNumber || null,
+          meterStatus: "Working",
+          multiplyingFactor: "1.00",
+          securityDeposit: c.securityDeposit || "0.00",
+          isDefault,
+        });
+      }
+
+      if (targetConsumer) {
+        data.consumerId = targetConsumer.id;
+      }
+    }
+
+    if (!data.consumerId) {
+      const def = await dbService.getDefaultConsumer();
+      if (def) data.consumerId = def.id;
+    }
+
     const parsed = billSchema.safeParse(data);
     if (!parsed.success) {
       return NextResponse.json(

@@ -113,6 +113,7 @@ export const appSettingsSchema = z.object({
   currency: z.string().default("INR"),
   timezone: z.string().default("Asia/Kolkata"),
   dueReminderDays: z.number().int().min(1).max(30).default(5),
+  geminiApiKey: z.string().optional().nullable(),
 });
 
 export function getZodErrorMessage(error: any): string {
