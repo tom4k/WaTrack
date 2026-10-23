@@ -14,16 +14,23 @@ import {
 
 export { schema };
 
-const isPostgres = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith("postgres"));
+const dbUrl =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_URL_NON_POOLING;
 
-// Setup PostgreSQL client if DATABASE_URL is available
+const isPostgres = Boolean(
+  dbUrl && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))
+);
+
+// Setup PostgreSQL client if DATABASE_URL/POSTGRES_URL is available
 let pgPool: pg.Pool | null = null;
 let pgDb: ReturnType<typeof drizzle> | null = null;
 
-if (isPostgres) {
+if (isPostgres && dbUrl) {
   try {
     pgPool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
     });
     pgDb = drizzle(pgPool, { schema });
