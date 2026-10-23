@@ -2,12 +2,17 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { put, del } from "@vercel/blob";
 
 const UPLOADS_DIR = path.join(process.cwd(), "storage", "documents");
 
-// Ensure directory exists
-if (!fsSync.existsSync(UPLOADS_DIR)) {
-  fsSync.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Ensure directory exists in local environment
+if (!process.env.BLOB_READ_WRITE_TOKEN && !fsSync.existsSync(UPLOADS_DIR)) {
+  try {
+    fsSync.mkdirSync(UPLOADS_DIR, { recursive: true });
+  } catch {
+    // Ignore directory creation failure on serverless read-only filesystems
+  }
 }
 
 export const ALLOWED_MIME_TYPES = [
@@ -27,16 +32,21 @@ export interface SavedFile {
 }
 
 /**
- * Validates and saves an uploaded file buffer safely to private storage
+ * Validates and saves an uploaded file buffer safely to Vercel Blob (production)
+ * or local private storage (development fallback).
  */
 export async function saveDocument(file: File): Promise<SavedFile> {
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    throw new Error(`File size exceeds maximum limit of 10MB (file is ${(file.size / (1024 * 1024)).toFixed(2)}MB)`);
+    throw new Error(
+      `File size exceeds maximum limit of 10MB (file is ${(file.size / (1024 * 1024)).toFixed(2)}MB)`
+    );
   }
 
   const mimeType = file.type || "application/octet-stream";
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
-    throw new Error(`Unsupported file format (${mimeType}). Allowed formats: PDF, JPEG, PNG, WEBP`);
+    throw new Error(
+      `Unsupported file format (${mimeType}). Allowed formats: PDF, JPEG, PNG, WEBP`
+    );
   }
 
   // Safe file extension
@@ -49,16 +59,32 @@ export async function saveDocument(file: File): Promise<SavedFile> {
   }
 
   const randomId = crypto.randomUUID();
-  const storedFilename = `${randomId}${ext}`;
-  const targetPath = path.join(UPLOADS_DIR, storedFilename);
+  const filename = `${randomId}${ext}`;
 
+  // If Vercel Blob is configured (recommended for production on Vercel)
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blob = await put(`bills/${filename}`, file, {
+      access: "public",
+      addRandomSuffix: false,
+    });
+
+    return {
+      storedFilename: blob.url,
+      originalFilename: file.name,
+      mimeType,
+      sizeBytes: file.size,
+    };
+  }
+
+  // Fallback to local filesystem for offline development
+  const targetPath = path.join(UPLOADS_DIR, filename);
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
   await fs.writeFile(targetPath, buffer);
 
   return {
-    storedFilename,
+    storedFilename: filename,
     originalFilename: file.name,
     mimeType,
     sizeBytes: file.size,
@@ -66,13 +92,30 @@ export async function saveDocument(file: File): Promise<SavedFile> {
 }
 
 /**
- * Retrieves a document from private storage safely
+ * Retrieves a document from private storage or cloud blob safely
  */
 export async function getDocument(storedFilename: string): Promise<{
   buffer: Buffer;
   exists: boolean;
+  contentType?: string;
 }> {
-  // Prevent path traversal
+  // If stored as a remote cloud blob URL
+  if (storedFilename.startsWith("http://") || storedFilename.startsWith("https://")) {
+    try {
+      const res = await fetch(storedFilename);
+      if (!res.ok) return { buffer: Buffer.from([]), exists: false };
+      const arrayBuffer = await res.arrayBuffer();
+      return {
+        buffer: Buffer.from(arrayBuffer),
+        exists: true,
+        contentType: res.headers.get("content-type") || undefined,
+      };
+    } catch {
+      return { buffer: Buffer.from([]), exists: false };
+    }
+  }
+
+  // Local filesystem fallback
   const sanitized = path.basename(storedFilename);
   const filePath = path.join(UPLOADS_DIR, sanitized);
 
@@ -88,6 +131,17 @@ export async function getDocument(storedFilename: string): Promise<{
  * Deletes a document if it exists
  */
 export async function deleteDocument(storedFilename: string): Promise<boolean> {
+  // Remote blob deletion
+  if (storedFilename.startsWith("http://") || storedFilename.startsWith("https://")) {
+    try {
+      await del(storedFilename);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Local filesystem deletion
   try {
     const sanitized = path.basename(storedFilename);
     const filePath = path.join(UPLOADS_DIR, sanitized);

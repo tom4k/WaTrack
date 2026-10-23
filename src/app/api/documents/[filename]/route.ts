@@ -11,22 +11,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     }
 
     const { filename } = await params;
-    const { buffer, exists } = await getDocument(filename);
+    const decodedFilename = decodeURIComponent(filename);
+    const { buffer, exists, contentType: blobContentType } = await getDocument(decodedFilename);
 
     if (!exists) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    const ext = path.extname(filename).toLowerCase();
-    let contentType = "application/octet-stream";
-    if (ext === ".pdf") contentType = "application/pdf";
-    else if (ext === ".jpg" || ext === ".jpeg") contentType = "image/jpeg";
-    else if (ext === ".png") contentType = "image/png";
-    else if (ext === ".webp") contentType = "image/webp";
+    const ext = path.extname(decodedFilename.split("?")[0]).toLowerCase();
+    let contentType = blobContentType || "application/octet-stream";
+    if (!blobContentType) {
+      if (ext === ".pdf") contentType = "application/pdf";
+      else if (ext === ".jpg" || ext === ".jpeg") contentType = "image/jpeg";
+      else if (ext === ".png") contentType = "image/png";
+      else if (ext === ".webp") contentType = "image/webp";
+    }
 
     const { searchParams } = new URL(req.url);
     const download = searchParams.get("download") === "true";
-    const originalName = searchParams.get("name") || filename;
+    const originalName = searchParams.get("name") || path.basename(decodedFilename);
 
     const disposition = download
       ? `attachment; filename="${encodeURIComponent(originalName)}"`

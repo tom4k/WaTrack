@@ -210,9 +210,15 @@ export function BillDetailsDrawer({
               </span>
               {bill.documentPath ? (
                 <a
-                  href={`/api/documents/${bill.documentPath}?name=${encodeURIComponent(
-                    bill.documentOriginalName || "KSEB_Bill.pdf"
-                  )}&download=true`}
+                  href={
+                    bill.documentPath.startsWith("http")
+                      ? bill.documentPath
+                      : `/api/documents/${encodeURIComponent(bill.documentPath)}?name=${encodeURIComponent(
+                          bill.documentOriginalName || "KSEB_Bill.pdf"
+                        )}&download=true`
+                  }
+                  target={bill.documentPath.startsWith("http") ? "_blank" : undefined}
+                  rel={bill.documentPath.startsWith("http") ? "noopener noreferrer" : undefined}
                   className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
                 >
                   <Download className="h-3.5 w-3.5" />
