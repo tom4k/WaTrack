@@ -10,8 +10,9 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || "/";
+  const explicitSetup = searchParams.get("mode") === "setup";
 
-  const [isSetupMode, setIsSetupMode] = useState(false);
+  const [isSetupMode, setIsSetupMode] = useState(explicitSetup);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,17 +25,26 @@ function LoginForm() {
 
   useEffect(() => {
     fetch("/api/auth/me")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) {
+          setIsSetupMode(true);
+          return null;
+        }
+        return res.json();
+      })
       .then((data) => {
+        if (!data) return;
         if (data.authenticated) {
           router.push(from);
-        } else if (!data.hasOwner) {
+        } else if (!data.hasOwner || explicitSetup) {
           setIsSetupMode(true);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setIsSetupMode(true);
+      })
       .finally(() => setCheckingAuth(false));
-  }, [from, router]);
+  }, [from, router, explicitSetup]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,11 +81,6 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillDemoCredentials = () => {
-    setEmail("owner@watrack.local");
-    setPassword("watrack123");
   };
 
   if (checkingAuth) {
@@ -158,7 +163,7 @@ function LoginForm() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="owner@watrack.local"
+                  placeholder="owner@yourdomain.com"
                   required
                   className="pl-9 bg-slate-950 border-slate-800 text-white"
                 />
@@ -215,18 +220,21 @@ function LoginForm() {
             </Button>
           </form>
 
-          {/* Quick Demo Credentials Helper */}
-          {!isSetupMode && (
-            <div className="mt-6 pt-4 border-t border-slate-800/80 flex flex-col items-center">
-              <button
-                type="button"
-                onClick={handleFillDemoCredentials}
-                className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1"
-              >
-                Use Default Credentials (owner@watrack.local)
-              </button>
-            </div>
-          )}
+          {/* Quick Setup Toggle & Helpers */}
+          <div className="mt-6 pt-4 border-t border-slate-800/80 flex flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setIsSetupMode(!isSetupMode);
+              }}
+              className="text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1.5 transition-colors"
+            >
+              {isSetupMode
+                ? "Already configured? Sign in as Owner →"
+                : "First time here? Switch to Initial Household Setup →"}
+            </button>
+          </div>
         </div>
 
         {/* Footer info */}

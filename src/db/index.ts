@@ -9,7 +9,6 @@ import {
   SAMPLE_BILLS,
   SAMPLE_PAYMENTS,
   DEFAULT_SETTINGS,
-  getDefaultOwnerUser,
 } from "./seed-data";
 
 export { schema };
@@ -39,13 +38,139 @@ if (isPostgres && dbUrl) {
   }
 }
 
+// PostgreSQL automatic schema initialization (for fresh Neon deployments)
+let pgSchemaEnsured = false;
+let pgSchemaPromise: Promise<void> | null = null;
+
+async function ensurePgSchema(): Promise<void> {
+  if (pgSchemaEnsured || !pgPool) return;
+  if (pgSchemaPromise) return pgSchemaPromise;
+
+  pgSchemaPromise = (async () => {
+    try {
+      await pgPool!.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT DEFAULT 'owner' NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS consumers (
+          id TEXT PRIMARY KEY,
+          consumer_number TEXT UNIQUE NOT NULL,
+          consumer_id TEXT,
+          name TEXT NOT NULL,
+          address TEXT,
+          phone TEXT,
+          section_name TEXT,
+          section_phone TEXT,
+          tariff TEXT DEFAULT 'LT-1 Dom' NOT NULL,
+          purpose TEXT DEFAULT 'Domestic',
+          category TEXT DEFAULT 'DOMESTIC',
+          connected_load TEXT DEFAULT '10 kW',
+          phase TEXT DEFAULT '3 Phase',
+          post_number TEXT,
+          transformer TEXT,
+          meter_serial_number TEXT,
+          meter_status TEXT DEFAULT 'Working',
+          multiplying_factor TEXT DEFAULT '1.00',
+          security_deposit TEXT DEFAULT '0.00',
+          is_default INTEGER DEFAULT 1 NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS bills (
+          id TEXT PRIMARY KEY,
+          consumer_id TEXT NOT NULL,
+          bill_number TEXT NOT NULL,
+          bill_area TEXT,
+          bill_date TEXT NOT NULL,
+          due_date TEXT NOT NULL,
+          disconnection_date TEXT,
+          reading_time TEXT,
+          previous_reading_date TEXT NOT NULL,
+          current_reading_date TEXT NOT NULL,
+          billing_cycle_days INTEGER DEFAULT 60 NOT NULL,
+          is_bi_monthly INTEGER DEFAULT 1 NOT NULL,
+          prev_reading_normal TEXT,
+          curr_reading_normal TEXT,
+          consumed_units_normal TEXT,
+          prev_reading_off_peak TEXT,
+          curr_reading_off_peak TEXT,
+          consumed_units_off_peak TEXT,
+          prev_reading_peak TEXT,
+          curr_reading_peak TEXT,
+          consumed_units_peak TEXT,
+          total_units TEXT NOT NULL,
+          energy_charge TEXT DEFAULT '0.00' NOT NULL,
+          duty TEXT DEFAULT '0.00' NOT NULL,
+          fuel_surcharge TEXT DEFAULT '0.00' NOT NULL,
+          fixed_charge TEXT DEFAULT '0.00' NOT NULL,
+          meter_rent TEXT DEFAULT '0.00' NOT NULL,
+          round_off TEXT DEFAULT '0.00' NOT NULL,
+          arrears TEXT DEFAULT '0.00' NOT NULL,
+          total_amount TEXT NOT NULL,
+          payable_amount TEXT NOT NULL,
+          paid_amount TEXT DEFAULT '0.00' NOT NULL,
+          status TEXT DEFAULT 'UNPAID' NOT NULL,
+          document_path TEXT,
+          document_original_name TEXT,
+          document_mime_type TEXT,
+          document_size_bytes BIGINT,
+          remarks TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS payments (
+          id TEXT PRIMARY KEY,
+          bill_id TEXT NOT NULL,
+          payment_date TEXT NOT NULL,
+          amount TEXT NOT NULL,
+          payment_method TEXT NOT NULL,
+          transaction_reference TEXT,
+          receipt_number TEXT,
+          notes TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id TEXT PRIMARY KEY,
+          household_name TEXT DEFAULT 'My Household' NOT NULL,
+          currency TEXT DEFAULT 'INR' NOT NULL,
+          timezone TEXT DEFAULT 'Asia/Kolkata' NOT NULL,
+          due_reminder_days INTEGER DEFAULT 5 NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      pgSchemaEnsured = true;
+    } catch (err) {
+      console.error("Failed to ensure PostgreSQL schema:", err);
+      throw err;
+    } finally {
+      pgSchemaPromise = null;
+    }
+  })();
+
+  return pgSchemaPromise;
+}
+
 // Local SQLite persistence for dev/tests or when DATABASE_URL is not provided
 let sqliteDb: DatabaseSync | null = null;
 
 function getSqliteDb(): DatabaseSync {
   if (sqliteDb) return sqliteDb;
 
-  const dataDir = path.join(process.cwd(), "data");
+  // Use /tmp/watrack_data when running in serverless / Vercel environment to prevent read-only filesystem errors
+  const dataDir = process.env.VERCEL
+    ? path.join("/tmp", "watrack_data")
+    : path.join(process.cwd(), "data");
+
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
@@ -258,11 +383,12 @@ function seedLocalData(db: DatabaseSync) {
           id, bill_id, payment_date, amount, payment_method, transaction_reference, receipt_number, notes, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        p.id, p.billId, p.paymentDate, p.amount, p.paymentMethod, p.transactionReference, p.receiptNumber, p.notes, now
+        p.id, p.billId, p.paymentDate, p.amount, p.paymentMethod,
+        p.transactionReference ?? null, p.receiptNumber ?? null, p.notes ?? null, now
       );
     }
 
-    // Settings
+    // App Settings
     db.prepare(`
       INSERT OR REPLACE INTO app_settings (
         id, household_name, currency, timezone, due_reminder_days, updated_at
@@ -277,13 +403,51 @@ function seedLocalData(db: DatabaseSync) {
 }
 
 /**
+ * Universal Database Helpers (PostgreSQL & SQLite)
+ */
+function toPgParams(sql: string): string {
+  let index = 1;
+  return sql.replace(/\?/g, () => `$${index++}`);
+}
+
+async function dbQueryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
+  if (isPostgres && pgPool) {
+    await ensurePgSchema();
+    const res = await pgPool.query(toPgParams(sql), params);
+    return (res.rows[0] as T) || null;
+  }
+  const sdb = getSqliteDb();
+  const row = sdb.prepare(sql).get(...params);
+  return (row as T) || null;
+}
+
+async function dbQueryAll<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  if (isPostgres && pgPool) {
+    await ensurePgSchema();
+    const res = await pgPool.query(toPgParams(sql), params);
+    return (res.rows as T[]) || [];
+  }
+  const sdb = getSqliteDb();
+  const rows = sdb.prepare(sql).all(...params);
+  return (rows as T[]) || [];
+}
+
+async function dbExecute(sql: string, params: any[] = []): Promise<any> {
+  if (isPostgres && pgPool) {
+    await ensurePgSchema();
+    return await pgPool.query(toPgParams(sql), params);
+  }
+  const sdb = getSqliteDb();
+  return sdb.prepare(sql).run(...params);
+}
+
+/**
  * Unified Database Service API
  */
 export const dbService = {
   // --- USERS ---
   async getOwner() {
-    const sdb = getSqliteDb();
-    const row = sdb.prepare("SELECT * FROM users WHERE role = 'owner' LIMIT 1").get() as any;
+    const row = await dbQueryOne<any>("SELECT * FROM users WHERE role = 'owner' LIMIT 1");
     if (!row) return null;
     return {
       id: row.id,
@@ -297,8 +461,7 @@ export const dbService = {
   },
 
   async getUserByEmail(email: string) {
-    const sdb = getSqliteDb();
-    const row = sdb.prepare("SELECT * FROM users WHERE email = ? LIMIT 1").get(email) as any;
+    const row = await dbQueryOne<any>("SELECT * FROM users WHERE email = ? LIMIT 1", [email]);
     if (!row) return null;
     return {
       id: row.id,
@@ -312,33 +475,29 @@ export const dbService = {
   },
 
   async getUserCount() {
-    const sdb = getSqliteDb();
-    const row = sdb.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-    return row?.count ?? 0;
+    const row = await dbQueryOne<{ count: number | string }>("SELECT COUNT(*) as count FROM users");
+    return Number(row?.count ?? 0);
   },
 
   async createOwner(data: { email: string; passwordHash: string; name: string }) {
-    const sdb = getSqliteDb();
     const id = "user-" + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
-    sdb.prepare(`
+    await dbExecute(`
       INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'owner', ?, ?)
-    `).run(id, data.email, data.passwordHash, data.name, now, now);
+    `, [id, data.email, data.passwordHash, data.name, now, now]);
     return this.getOwner();
   },
 
   async updateOwnerPassword(id: string, newHash: string) {
-    const sdb = getSqliteDb();
     const now = new Date().toISOString();
-    sdb.prepare("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?").run(newHash, now, id);
+    await dbExecute("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", [newHash, now, id]);
     return true;
   },
 
   // --- CONSUMERS ---
   async getConsumers() {
-    const sdb = getSqliteDb();
-    const rows = sdb.prepare("SELECT * FROM consumers ORDER BY is_default DESC, name ASC").all() as any[];
+    const rows = await dbQueryAll<any>("SELECT * FROM consumers ORDER BY is_default DESC, name ASC");
     return rows.map((r) => ({
       id: r.id,
       consumerNumber: r.consumer_number,
@@ -359,17 +518,16 @@ export const dbService = {
       meterStatus: r.meter_status,
       multiplyingFactor: r.multiplying_factor,
       securityDeposit: r.security_deposit,
-      isDefault: Boolean(r.is_default),
+      isDefault: Boolean(Number(r.is_default)),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
   },
 
   async getDefaultConsumer() {
-    const sdb = getSqliteDb();
-    let row = sdb.prepare("SELECT * FROM consumers WHERE is_default = 1 LIMIT 1").get() as any;
+    let row = await dbQueryOne<any>("SELECT * FROM consumers WHERE is_default = 1 LIMIT 1");
     if (!row) {
-      row = sdb.prepare("SELECT * FROM consumers LIMIT 1").get() as any;
+      row = await dbQueryOne<any>("SELECT * FROM consumers LIMIT 1");
     }
     if (!row) return null;
     return {
@@ -392,15 +550,14 @@ export const dbService = {
       meterStatus: row.meter_status,
       multiplyingFactor: row.multiplying_factor,
       securityDeposit: row.security_deposit,
-      isDefault: Boolean(row.is_default),
+      isDefault: Boolean(Number(row.is_default)),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   },
 
   async getConsumerById(id: string) {
-    const sdb = getSqliteDb();
-    const row = sdb.prepare("SELECT * FROM consumers WHERE id = ?").get(id) as any;
+    const row = await dbQueryOne<any>("SELECT * FROM consumers WHERE id = ? LIMIT 1", [id]);
     if (!row) return null;
     return {
       id: row.id,
@@ -422,48 +579,46 @@ export const dbService = {
       meterStatus: row.meter_status,
       multiplyingFactor: row.multiplying_factor,
       securityDeposit: row.security_deposit,
-      isDefault: Boolean(row.is_default),
+      isDefault: Boolean(Number(row.is_default)),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   },
 
   async createConsumer(data: any) {
-    const sdb = getSqliteDb();
     const id = "cons-" + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
 
     if (data.isDefault) {
-      sdb.prepare("UPDATE consumers SET is_default = 0").run();
+      await dbExecute("UPDATE consumers SET is_default = 0");
     }
 
-    sdb.prepare(`
+    await dbExecute(`
       INSERT INTO consumers (
         id, consumer_number, consumer_id, name, address, phone, section_name, section_phone,
         tariff, purpose, category, connected_load, phase, post_number, transformer,
         meter_serial_number, meter_status, multiplying_factor, security_deposit, is_default,
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       id, data.consumerNumber, data.consumerId ?? null, data.name, data.address ?? null, data.phone ?? null,
       data.sectionName, data.sectionPhone ?? null, data.tariff ?? "LT-1 Dom", data.purpose ?? "Domestic",
       data.category ?? "DOMESTIC", data.connectedLoad ?? "10 kW", data.phase ?? "3 Phase",
       data.postNumber ?? null, data.transformer ?? null, data.meterSerialNumber ?? null,
       data.meterStatus ?? "Working", String(data.multiplyingFactor ?? "1.00"), String(data.securityDeposit ?? "0.00"),
       data.isDefault ? 1 : 0, now, now
-    );
+    ]);
     return this.getConsumerById(id);
   },
 
   async updateConsumer(id: string, data: any) {
-    const sdb = getSqliteDb();
     const now = new Date().toISOString();
 
     if (data.isDefault) {
-      sdb.prepare("UPDATE consumers SET is_default = 0 WHERE id != ?").run(id);
+      await dbExecute("UPDATE consumers SET is_default = 0 WHERE id != ?", [id]);
     }
 
-    sdb.prepare(`
+    await dbExecute(`
       UPDATE consumers SET
         consumer_number = ?, consumer_id = ?, name = ?, address = ?, phone = ?,
         section_name = ?, section_phone = ?, tariff = ?, purpose = ?, category = ?,
@@ -471,20 +626,19 @@ export const dbService = {
         meter_serial_number = ?, meter_status = ?, multiplying_factor = ?,
         security_deposit = ?, is_default = ?, updated_at = ?
       WHERE id = ?
-    `).run(
+    `, [
       data.consumerNumber, data.consumerId ?? null, data.name, data.address ?? null, data.phone ?? null,
       data.sectionName, data.sectionPhone ?? null, data.tariff ?? "LT-1 Dom", data.purpose ?? "Domestic",
       data.category ?? "DOMESTIC", data.connectedLoad ?? "10 kW", data.phase ?? "3 Phase",
       data.postNumber ?? null, data.transformer ?? null, data.meterSerialNumber ?? null,
       data.meterStatus ?? "Working", String(data.multiplyingFactor ?? "1.00"), String(data.securityDeposit ?? "0.00"),
       data.isDefault ? 1 : 0, now, id
-    );
+    ]);
     return this.getConsumerById(id);
   },
 
   // --- BILLS ---
   async getBills(filters?: { status?: string; year?: string; search?: string; consumerId?: string }) {
-    const sdb = getSqliteDb();
     let query = "SELECT b.*, c.name as consumer_name, c.consumer_number FROM bills b LEFT JOIN consumers c ON b.consumer_id = c.id WHERE 1=1";
     const params: any[] = [];
 
@@ -507,7 +661,7 @@ export const dbService = {
     }
 
     query += " ORDER BY b.bill_date DESC";
-    const rows = sdb.prepare(query).all(...params) as any[];
+    const rows = await dbQueryAll<any>(query, params);
 
     // Recalculate overdue status dynamically
     const today = new Date().toISOString().split("T")[0];
@@ -530,14 +684,15 @@ export const dbService = {
   },
 
   async getBillById(id: string) {
-    const sdb = getSqliteDb();
-    const row = sdb.prepare("SELECT b.*, c.name as consumer_name, c.consumer_number, c.tariff, c.phase, c.connected_load, c.section_name FROM bills b LEFT JOIN consumers c ON b.consumer_id = c.id WHERE b.id = ?").get(id) as any;
+    const row = await dbQueryOne<any>(
+      "SELECT b.*, c.name as consumer_name, c.consumer_number, c.tariff, c.phase, c.connected_load, c.section_name FROM bills b LEFT JOIN consumers c ON b.consumer_id = c.id WHERE b.id = ? LIMIT 1",
+      [id]
+    );
     if (!row) return null;
     return mapBillRow(row, row.status);
   },
 
   async createBill(data: any) {
-    const sdb = getSqliteDb();
     const id = "bill-" + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
 
@@ -549,7 +704,7 @@ export const dbService = {
     else if (paid > 0) status = "PARTIALLY_PAID";
     else if (data.dueDate < today) status = "OVERDUE";
 
-    sdb.prepare(`
+    await dbExecute(`
       INSERT INTO bills (
         id, consumer_id, bill_number, bill_area, bill_date, due_date, disconnection_date,
         reading_time, previous_reading_date, current_reading_date, billing_cycle_days,
@@ -563,7 +718,7 @@ export const dbService = {
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
-    `).run(
+    `, [
       id, data.consumerId, data.billNumber, data.billArea ?? null, data.billDate, data.dueDate,
       data.disconnectionDate ?? null, data.readingTime ?? null, data.previousReadingDate, data.currentReadingDate,
       Number(data.billingCycleDays || 60), data.isBiMonthly ? 1 : 0,
@@ -577,13 +732,12 @@ export const dbService = {
       r_num(data.paidAmount, "0.00"), status,
       data.documentPath ?? null, data.documentOriginalName ?? null, data.documentMimeType ?? null, data.documentSizeBytes ? Number(data.documentSizeBytes) : null,
       data.remarks ?? null, now, now
-    );
+    ]);
 
     return this.getBillById(id);
   },
 
   async updateBill(id: string, data: any) {
-    const sdb = getSqliteDb();
     const now = new Date().toISOString();
     const current = await this.getBillById(id);
     if (!current) return null;
@@ -597,7 +751,7 @@ export const dbService = {
     else if (paid > 0) status = "PARTIALLY_PAID";
     else if (dueDate < today) status = "OVERDUE";
 
-    sdb.prepare(`
+    await dbExecute(`
       UPDATE bills SET
         consumer_id = ?, bill_number = ?, bill_area = ?, bill_date = ?, due_date = ?,
         disconnection_date = ?, reading_time = ?, previous_reading_date = ?, current_reading_date = ?,
@@ -614,7 +768,7 @@ export const dbService = {
         document_size_bytes = COALESCE(?, document_size_bytes),
         remarks = ?, updated_at = ?
       WHERE id = ?
-    `).run(
+    `, [
       data.consumerId ?? current.consumerId,
       data.billNumber ?? current.billNumber,
       data.billArea ?? current.billArea,
@@ -654,21 +808,19 @@ export const dbService = {
       data.remarks ?? current.remarks,
       now,
       id
-    );
+    ]);
 
     return this.getBillById(id);
   },
 
   async deleteBill(id: string) {
-    const sdb = getSqliteDb();
-    sdb.prepare("DELETE FROM payments WHERE bill_id = ?").run(id);
-    sdb.prepare("DELETE FROM bills WHERE id = ?").run(id);
+    await dbExecute("DELETE FROM payments WHERE bill_id = ?", [id]);
+    await dbExecute("DELETE FROM bills WHERE id = ?", [id]);
     return true;
   },
 
   // --- PAYMENTS ---
   async getPayments(billId?: string) {
-    const sdb = getSqliteDb();
     let query = `
       SELECT p.*, b.bill_number, b.bill_date, b.payable_amount, c.name as consumer_name, c.consumer_number
       FROM payments p
@@ -681,7 +833,7 @@ export const dbService = {
       params.push(billId);
     }
     query += " ORDER BY p.payment_date DESC, p.created_at DESC";
-    const rows = sdb.prepare(query).all(...params) as any[];
+    const rows = await dbQueryAll<any>(query, params);
 
     return rows.map((r) => ({
       id: r.id,
@@ -710,22 +862,21 @@ export const dbService = {
     receiptNumber?: string | null;
     notes?: string | null;
   }) {
-    const sdb = getSqliteDb();
     const id = "pay-" + Math.random().toString(36).substring(2, 10);
     const now = new Date().toISOString();
     const amountNum = parseFloat(String(data.amount));
 
-    sdb.prepare(`
+    await dbExecute(`
       INSERT INTO payments (
         id, bill_id, payment_date, amount, payment_method, transaction_reference, receipt_number, notes, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       id, data.billId, data.paymentDate, String(amountNum.toFixed(2)),
       data.paymentMethod, data.transactionReference ?? null, data.receiptNumber ?? null, data.notes ?? null, now
-    );
+    ]);
 
     // Update bill paid amount and status
-    const currentPayments = sdb.prepare("SELECT SUM(CAST(amount AS REAL)) as total_paid FROM payments WHERE bill_id = ?").get(data.billId) as any;
+    const currentPayments = await dbQueryOne<any>("SELECT SUM(CAST(amount AS REAL)) as total_paid FROM payments WHERE bill_id = ?", [data.billId]);
     const totalPaid = Number(currentPayments?.total_paid || 0);
 
     const bill = await this.getBillById(data.billId);
@@ -741,23 +892,22 @@ export const dbService = {
         status = "OVERDUE";
       }
 
-      sdb.prepare("UPDATE bills SET paid_amount = ?, status = ?, updated_at = ? WHERE id = ?").run(
+      await dbExecute("UPDATE bills SET paid_amount = ?, status = ?, updated_at = ? WHERE id = ?", [
         totalPaid.toFixed(2), status, now, data.billId
-      );
+      ]);
     }
 
     return { id, totalPaid };
   },
 
   async deletePayment(id: string) {
-    const sdb = getSqliteDb();
-    const payment = sdb.prepare("SELECT * FROM payments WHERE id = ?").get(id) as any;
+    const payment = await dbQueryOne<any>("SELECT * FROM payments WHERE id = ? LIMIT 1", [id]);
     if (!payment) return false;
 
-    sdb.prepare("DELETE FROM payments WHERE id = ?").run(id);
+    await dbExecute("DELETE FROM payments WHERE id = ?", [id]);
 
     // Recalculate bill status
-    const currentPayments = sdb.prepare("SELECT SUM(CAST(amount AS REAL)) as total_paid FROM payments WHERE bill_id = ?").get(payment.bill_id) as any;
+    const currentPayments = await dbQueryOne<any>("SELECT SUM(CAST(amount AS REAL)) as total_paid FROM payments WHERE bill_id = ?", [payment.bill_id]);
     const totalPaid = Number(currentPayments?.total_paid || 0);
 
     const bill = await this.getBillById(payment.bill_id);
@@ -770,23 +920,22 @@ export const dbService = {
       else if (bill.dueDate < today) status = "OVERDUE";
 
       const now = new Date().toISOString();
-      sdb.prepare("UPDATE bills SET paid_amount = ?, status = ?, updated_at = ? WHERE id = ?").run(
+      await dbExecute("UPDATE bills SET paid_amount = ?, status = ?, updated_at = ? WHERE id = ?", [
         totalPaid.toFixed(2), status, now, payment.bill_id
-      );
+      ]);
     }
     return true;
   },
 
   // --- SETTINGS ---
   async getSettings() {
-    const sdb = getSqliteDb();
-    let row = sdb.prepare("SELECT * FROM app_settings LIMIT 1").get() as any;
+    let row = await dbQueryOne<any>("SELECT * FROM app_settings LIMIT 1");
     if (!row) {
       const now = new Date().toISOString();
-      sdb.prepare(`
+      await dbExecute(`
         INSERT INTO app_settings (id, household_name, currency, timezone, due_reminder_days, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(DEFAULT_SETTINGS.id, DEFAULT_SETTINGS.householdName, DEFAULT_SETTINGS.currency, DEFAULT_SETTINGS.timezone, DEFAULT_SETTINGS.dueReminderDays, now);
+      `, [DEFAULT_SETTINGS.id, DEFAULT_SETTINGS.householdName, DEFAULT_SETTINGS.currency, DEFAULT_SETTINGS.timezone, DEFAULT_SETTINGS.dueReminderDays, now]);
       row = DEFAULT_SETTINGS;
     }
     return {
@@ -799,26 +948,61 @@ export const dbService = {
   },
 
   async updateSettings(data: { householdName?: string; currency?: string; timezone?: string; dueReminderDays?: number }) {
-    const sdb = getSqliteDb();
     const current = await this.getSettings();
     const now = new Date().toISOString();
-    sdb.prepare(`
+    await dbExecute(`
       UPDATE app_settings SET
         household_name = ?, currency = ?, timezone = ?, due_reminder_days = ?, updated_at = ?
       WHERE id = ?
-    `).run(
+    `, [
       data.householdName ?? current.householdName,
       data.currency ?? current.currency,
       data.timezone ?? current.timezone,
       data.dueReminderDays ?? current.dueReminderDays,
       now,
       current.id
-    );
+    ]);
     return this.getSettings();
   },
 
   // --- SEED OR RESET ---
   async seedSampleData() {
+    if (isPostgres && pgPool) {
+      await ensurePgSchema();
+      const now = new Date().toISOString();
+      await dbExecute(`
+        INSERT INTO users (id, email, password_hash, name, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO NOTHING
+      `, [
+        "user-owner-default",
+        "owner@watrack.local",
+        "$2b$10$Iu4c98umnJLiji9uM/r0vOAWy5Ghj7APCJ0gvNQj7fpOmn4jPr1Km",
+        "Household Administrator",
+        "owner",
+        now,
+        now,
+      ]);
+      await dbExecute(`
+        INSERT INTO consumers (
+          id, consumer_number, consumer_id, name, address, phone, section_name, section_phone,
+          tariff, purpose, category, connected_load, phase, post_number, transformer,
+          meter_serial_number, meter_status, multiplying_factor, security_deposit, is_default,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO NOTHING
+      `, [
+        SAMPLE_CONSUMER.id, SAMPLE_CONSUMER.consumerNumber, SAMPLE_CONSUMER.consumerId,
+        SAMPLE_CONSUMER.name, SAMPLE_CONSUMER.address, SAMPLE_CONSUMER.phone,
+        SAMPLE_CONSUMER.sectionName, SAMPLE_CONSUMER.sectionPhone, SAMPLE_CONSUMER.tariff,
+        SAMPLE_CONSUMER.purpose, SAMPLE_CONSUMER.category, SAMPLE_CONSUMER.connectedLoad,
+        SAMPLE_CONSUMER.phase, SAMPLE_CONSUMER.postNumber, SAMPLE_CONSUMER.transformer,
+        SAMPLE_CONSUMER.meterSerialNumber, SAMPLE_CONSUMER.meterStatus,
+        SAMPLE_CONSUMER.multiplyingFactor, SAMPLE_CONSUMER.securityDeposit,
+        SAMPLE_CONSUMER.isDefault ? 1 : 0, now, now
+      ]);
+      return true;
+    }
     const sdb = getSqliteDb();
     seedLocalData(sdb);
     return true;
@@ -855,7 +1039,7 @@ function mapBillRow(r: any, dynamicStatus: string) {
     previousReadingDate: r.previous_reading_date,
     currentReadingDate: r.current_reading_date,
     billingCycleDays: r.billing_cycle_days,
-    isBiMonthly: Boolean(r.is_bi_monthly),
+    isBiMonthly: Boolean(Number(r.is_bi_monthly)),
     prevReadingNormal: r.prev_reading_normal,
     currReadingNormal: r.curr_reading_normal,
     consumedUnitsNormal: r.consumed_units_normal,
@@ -880,7 +1064,7 @@ function mapBillRow(r: any, dynamicStatus: string) {
     documentPath: r.document_path,
     documentOriginalName: r.document_original_name,
     documentMimeType: r.document_mime_type,
-    documentSizeBytes: r.document_size_bytes,
+    documentSizeBytes: r.document_size_bytes ? Number(r.document_size_bytes) : null,
     remarks: r.remarks,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
