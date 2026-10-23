@@ -154,6 +154,53 @@ export async function parseBillImage(
   return await parseWithTesseract(buffer);
 }
 
+async function getBestFlashModel(ai: GoogleGenAI): Promise<string[]> {
+  const fallbackCandidates = [
+    "gemini-2.0-flash",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-pro",
+  ];
+
+  try {
+    const pager = await ai.models.list();
+    const available: string[] = [];
+    for await (const m of pager) {
+      const name = m.name?.replace(/^models\//, "") || "";
+      if (
+        !m.supportedActions ||
+        m.supportedActions.includes("generateContent") ||
+        (m as any).supportedGenerationMethods?.includes("generateContent")
+      ) {
+        if (name) available.push(name);
+      }
+    }
+
+    if (available.length > 0) {
+      const sorted = [...available].sort((a, b) => {
+        const score = (str: string) => {
+          if (str === "gemini-2.0-flash") return 100;
+          if (str === "gemini-flash-latest") return 90;
+          if (str === "gemini-2.5-flash") return 85;
+          if (str.includes("2.0-flash")) return 80;
+          if (str.includes("flash") && !str.includes("8b")) return 70;
+          if (str.includes("flash")) return 60;
+          if (str.includes("pro")) return 50;
+          return 10;
+        };
+        return score(b) - score(a);
+      });
+      return sorted;
+    }
+  } catch (err) {
+    console.warn("Could not list models from Google API, using fallback candidates:", err);
+  }
+
+  return fallbackCandidates;
+}
+
 async function parseWithGemini(
   buffer: Buffer,
   mimeType: string,
@@ -162,51 +209,44 @@ async function parseWithGemini(
   const ai = new GoogleGenAI({ apiKey });
   const base64Data = buffer.toString("base64");
 
-  // Attempt with gemini-2.0-flash, fallback to gemini-1.5-flash
+  const modelCandidates = await getBestFlashModel(ai);
   let rawText = "";
-  try {
-    const res = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType || "image/jpeg",
+  let lastError: any = null;
+
+  for (const model of modelCandidates.slice(0, 4)) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType || "image/jpeg",
+                },
               },
-            },
-            {
-              text: KSEB_PROMPT,
-            },
-          ],
-        },
-      ],
-    });
-    rawText = res.text || "";
-  } catch (err) {
-    console.warn("gemini-2.0-flash failed, trying gemini-1.5-flash...", err);
-    const res = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType || "image/jpeg",
+              {
+                text: KSEB_PROMPT,
               },
-            },
-            {
-              text: KSEB_PROMPT,
-            },
-          ],
-        },
-      ],
-    });
-    rawText = res.text || "";
+            ],
+          },
+        ],
+      });
+      rawText = res.text || "";
+      if (rawText) {
+        console.log(`Successfully parsed bill using model: ${model}`);
+        break;
+      }
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`Model ${model} failed, trying next candidate...`, err.message || err);
+    }
+  }
+
+  if (!rawText && lastError) {
+    throw lastError;
   }
 
   // Clean markdown code blocks if returned
