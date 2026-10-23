@@ -149,10 +149,16 @@ function getSqliteDb(): DatabaseSync {
     );
   `);
 
-  // Auto-seed if empty
-  const userCount = (sqliteDb.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number })?.count ?? 0;
-  if (userCount === 0) {
-    seedLocalData(sqliteDb);
+  // Auto-seed only in non-production if explicitly requested via AUTO_SEED=true
+  const shouldAutoSeed =
+    process.env.NODE_ENV !== "production" && process.env.AUTO_SEED === "true";
+
+  if (shouldAutoSeed) {
+    const userCount =
+      (sqliteDb.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number })?.count ?? 0;
+    if (userCount === 0) {
+      seedLocalData(sqliteDb);
+    }
   }
 
   return sqliteDb;

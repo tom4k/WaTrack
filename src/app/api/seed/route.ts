@@ -9,6 +9,13 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (process.env.NODE_ENV === "production" && process.env.ENABLE_SAMPLE_SEED !== "true") {
+      return NextResponse.json(
+        { error: "Sample data seeding is disabled in production environments." },
+        { status: 403 }
+      );
+    }
+
     await dbService.seedSampleData();
     return NextResponse.json({ success: true, message: "Sample KSEB data seeded successfully" });
   } catch (err: any) {

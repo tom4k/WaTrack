@@ -288,39 +288,41 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200/80 dark:border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Database className="h-4 w-4 text-emerald-600" />
-                Sample Data Management
-              </CardTitle>
-              <CardDescription>
-                Restore sample KSEB bills (Kuriyakose Alexander, Pala Section)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-xs text-slate-500">
-                Populates the sample spot notice bill from the photo + 6 bi-monthly cycles for instant analytics.
-              </p>
-              <div className="flex items-center justify-between">
-                {seedSuccess && (
-                  <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
-                    <Check className="h-3.5 w-3.5" /> Seeded!
-                  </span>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSeedData}
-                  disabled={seeding}
-                  className="gap-1.5 text-xs ml-auto"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${seeding ? "animate-spin" : ""}`} />
-                  {seeding ? "Seeding..." : "Reset / Seed Sample Data"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          {process.env.NODE_ENV !== "production" && (
+            <Card className="border-slate-200/80 dark:border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Database className="h-4 w-4 text-emerald-600" />
+                  Sample Data Management
+                </CardTitle>
+                <CardDescription>
+                  Restore sample KSEB bills (Kuriyakose Alexander, Pala Section)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  Populates the sample spot notice bill from the photo + 6 bi-monthly cycles for instant analytics.
+                </p>
+                <div className="flex items-center justify-between">
+                  {seedSuccess && (
+                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5" /> Seeded!
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSeedData}
+                    disabled={seeding}
+                    className="gap-1.5 text-xs ml-auto"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${seeding ? "animate-spin" : ""}`} />
+                    {seeding ? "Seeding..." : "Reset / Seed Sample Data"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </AppShell>
