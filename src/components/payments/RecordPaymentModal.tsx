@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { CreditCard, Check, AlertCircle } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ export function RecordPaymentModal({
   const paid = parseFloat(bill?.paidAmount || "0");
   const remaining = Math.max(0, payable - paid);
 
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState(String(remaining.toFixed(2)));
   const [paymentMethod, setPaymentMethod] = useState("KSEB Online Portal");
   const [transactionReference, setTransactionReference] = useState("");
@@ -33,7 +33,14 @@ export function RecordPaymentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!bill) return null;
+  useEffect(() => {
+    if (open) {
+      setPaymentDate(new Date().toISOString().split("T")[0]);
+      setAmount(String(remaining.toFixed(2)));
+    }
+  }, [open, remaining]);
+
+  if (!open || !bill) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

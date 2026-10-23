@@ -1,19 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import {
   Zap,
   Plus,
   Receipt,
   ExternalLink,
-  RefreshCw,
-  FileText,
   Calendar,
-  AlertCircle,
   TrendingUp,
   MapPin,
-  Shield,
-  CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { StatCards } from "@/components/dashboard/StatCards";
@@ -27,12 +24,13 @@ import { ThermalReceiptModal } from "@/components/bills/ThermalReceiptModal";
 import { Button } from "@/components/ui/button";
 import { formatINR, formatKolkataDate } from "@/lib/formatters";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [bills, setBills] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [consumers, setConsumers] = useState<any[]>([]);
   const [defaultConsumer, setDefaultConsumer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [todayStr, setTodayStr] = useState("");
 
   // Modals
   const [isAddBillOpen, setIsAddBillOpen] = useState(false);
@@ -67,6 +65,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    setTodayStr(formatKolkataDate(new Date(), { showDayOfWeek: true, format: "full" }));
     fetchData();
   }, []);
 
@@ -84,8 +83,6 @@ export default function DashboardPage() {
     }
   };
 
-  const todayStr = formatKolkataDate(new Date(), { showDayOfWeek: true, format: "full" });
-
   return (
     <AppShell>
       <div className="space-y-6">
@@ -102,7 +99,7 @@ export default function DashboardPage() {
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
               <Calendar className="h-3.5 w-3.5" />
-              <span>{todayStr} • Asia/Kolkata</span>
+              <span>{todayStr || "Asia/Kolkata"}</span>
             </p>
           </div>
 
@@ -126,6 +123,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Loading Skeleton */}
+        {loading && !analytics && (
+          <div className="space-y-4 animate-pulse">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-28 rounded-2xl bg-slate-200/70 dark:bg-slate-800/60" />
+              ))}
+            </div>
+            <div className="h-40 rounded-2xl bg-slate-200/70 dark:bg-slate-800/60" />
+          </div>
+        )}
+
         {/* Urgent Due Date Alert Banner */}
         {analytics?.nextDueBill && (
           <DueAlertBanner
@@ -142,10 +151,10 @@ export default function DashboardPage() {
         )}
 
         {/* 4 Core KPI Stat Cards */}
-        <StatCards analytics={analytics} />
+        {analytics && <StatCards analytics={analytics} />}
 
         {/* Active Consumer Connection Profile Banner */}
-        {defaultConsumer && (
+        {defaultConsumer ? (
           <div className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -184,10 +193,43 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        ) : (
+          !loading && (
+            <div className="p-6 rounded-2xl border border-dashed border-emerald-500/40 bg-gradient-to-r from-emerald-950/20 via-slate-900/40 to-teal-950/20 text-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 ring-1 ring-emerald-500/30">
+                  <Sparkles className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-100">Welcome to your WaTrack Dashboard</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Start by setting up your 13-digit KSEB Consumer Number or record your first electricity bill.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <Link
+                  href="/consumers"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 transition-all gap-1.5 whitespace-nowrap"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add KSEB Profile</span>
+                </Link>
+                <Button
+                  onClick={() => setIsAddBillOpen(true)}
+                  variant="outline"
+                  className="text-xs font-semibold gap-1.5 whitespace-nowrap"
+                >
+                  <Receipt className="h-4 w-4" />
+                  <span>Add Bill</span>
+                </Button>
+              </div>
+            </div>
+          )
         )}
 
         {/* Charts Grid */}
-        {analytics && (
+        {analytics && analytics.cycleHistory && analytics.cycleHistory.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <ConsumptionChart
@@ -199,6 +241,18 @@ export default function DashboardPage() {
               <TODBreakdownChart todDistribution={analytics.todDistribution} />
             </div>
           </div>
+        ) : (
+          !loading && (
+            <div className="p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/50 dark:bg-slate-900/40 backdrop-blur-sm text-center">
+              <div className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 mb-2">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">No Consumption Data Yet</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Once you record your first KSEB spot bill, bi-monthly consumption trends and Time-Of-Day meter breakdowns will automatically appear here.
+              </p>
+            </div>
+          )
         )}
 
         {/* Recent Bills Section */}
@@ -266,5 +320,24 @@ export default function DashboardPage() {
         />
       )}
     </AppShell>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell>
+          <div className="min-h-[50vh] flex items-center justify-center text-slate-400">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-emerald-400 animate-bounce" />
+              <span className="text-xs font-semibold">Loading Dashboard...</span>
+            </div>
+          </div>
+        </AppShell>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
