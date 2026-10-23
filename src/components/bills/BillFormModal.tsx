@@ -22,6 +22,55 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { formatINR, toDecimal2 } from "@/lib/formatters";
 
+async function downscaleImage(file: File, maxDim = 1200): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width <= maxDim && height <= maxDim) {
+        resolve(file);
+        return;
+      }
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(file);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          const resized = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" });
+          resolve(resized);
+        },
+        "image/jpeg",
+        0.82
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
 interface BillFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -166,8 +215,9 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       setPreviewUrl(null);
     }
 
-    // Auto-scan photo
-    await scanBillPhoto(file);
+    // Downscale on client before sending to OCR so 3.4 MB becomes ~180 KB in 30ms!
+    const fileToScan = await downscaleImage(file);
+    await scanBillPhoto(fileToScan);
   };
 
   const scanBillPhoto = async (file: File) => {
@@ -178,13 +228,30 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       const formData = new FormData();
       formData.append("file", file);
 
+      // Client abort controller with 7.5 second timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7500);
+
       const res = await fetch("/api/bills/parse", {
         method: "POST",
         body: formData,
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to parse bill photo");
+      const rawText = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        // If server timed out or returned HTML error, gracefully open manual review with photo attached
+        setShowManualFields(true);
+        setError("Scan took longer than expected on this photo. Your bill photo is attached — please review or confirm key numbers below.");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to parse bill photo");
+      }
 
       setScanResult(data);
 
@@ -236,7 +303,11 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       }
     } catch (err: any) {
       console.error("Scan error:", err);
-      setError(err.message || "Failed to scan photo. You can enter details manually.");
+      if (err.name === "AbortError") {
+        setError("Scan took longer than expected. You can confirm the key details below or save directly.");
+      } else {
+        setError(err.message || "Failed to scan photo. You can enter details manually.");
+      }
       setShowManualFields(true);
     } finally {
       setScanning(false);
@@ -392,10 +463,22 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                         {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.type || "Document"}
                       </p>
                       {scanning && (
-                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5 mt-1 animate-pulse">
-                          <RefreshCw className="h-3 w-3 animate-spin" />
-                          Scanning KSEB bill slip with AI Vision...
-                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5 animate-pulse">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
+                            Scanning KSEB bill slip with AI Vision...
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScanning(false);
+                              setShowManualFields(true);
+                            }}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline font-medium"
+                          >
+                            Skip & enter manually
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

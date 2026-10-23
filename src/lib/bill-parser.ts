@@ -266,10 +266,35 @@ async function parseWithGemini(
 }
 
 async function parseWithTesseract(buffer: Buffer): Promise<ParsedBillResult> {
-  const worker = await createWorker("eng");
-  const ret = await worker.recognize(buffer);
-  const text = ret.data.text || "";
-  await worker.terminate();
+  let worker: any = null;
+  const ocrPromise = (async () => {
+    worker = await createWorker("eng");
+    const ret = await worker.recognize(buffer);
+    const text = ret.data.text || "";
+    await worker.terminate();
+    worker = null;
+    return extractFromText(text);
+  })();
+
+  const timeoutPromise = new Promise<ParsedBillResult>((resolve) => {
+    setTimeout(async () => {
+      if (worker) {
+        try {
+          await worker.terminate();
+        } catch {}
+      }
+      resolve(extractFromText("", "Scan timed out on high-resolution image"));
+    }, 5000);
+  });
+
+  try {
+    return await Promise.race([ocrPromise, timeoutPromise]);
+  } catch {
+    return extractFromText("", "OCR fallback");
+  }
+}
+
+function extractFromText(text: string, customRemark?: string): ParsedBillResult {
 
   // Heuristic extraction
   const today = new Date().toISOString().split("T")[0];
