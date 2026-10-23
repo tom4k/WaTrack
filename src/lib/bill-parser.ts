@@ -154,64 +154,92 @@ export async function parseBillImage(
   return await parseWithTesseract(buffer);
 }
 
-const CANDIDATE_MODELS = [
-  process.env.GEMINI_MODEL,
-  "gemini-3.8-flash",
-  "gemini-3.8-flash-latest",
-  "gemini-3-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-].filter(Boolean) as string[];
+async function detectBestModel(apiKey: string): Promise<string> {
+  if (process.env.GEMINI_MODEL) {
+    return process.env.GEMINI_MODEL;
+  }
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await res.json();
+    if (data.models && Array.isArray(data.models)) {
+      const available: string[] = data.models
+        .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
+        .map((m: any) => m.name.replace(/^models\//, ""));
+
+      const preferred = [
+        "gemini-3.8-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash-exp",
+      ];
+
+      for (const p of preferred) {
+        if (available.includes(p)) return p;
+      }
+
+      const anyFlash = available.find((n: string) => n.includes("flash") && !n.includes("8b"));
+      if (anyFlash) return anyFlash;
+
+      if (available.length > 0) return available[0];
+    }
+  } catch (e) {
+    console.warn("Model auto-detection failed, using default:", e);
+  }
+
+  return "gemini-2.0-flash";
+}
 
 async function parseWithGemini(
   buffer: Buffer,
   mimeType: string,
   apiKey: string
 ): Promise<ParsedBillResult | null> {
-  const ai = new GoogleGenAI({ apiKey });
+  const model = await detectBestModel(apiKey);
+  console.log(`Using auto-detected Gemini model: ${model}`);
+
   const base64Data = buffer.toString("base64");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  let rawText = "";
-  let lastError: any = null;
-
-  for (const model of CANDIDATE_MODELS) {
-    try {
-      const res = await ai.models.generateContent({
-        model,
-        contents: [
+  const payload = {
+    contents: [
+      {
+        parts: [
           {
-            role: "user",
-            parts: [
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType || "image/jpeg",
-                },
-              },
-              {
-                text: KSEB_PROMPT,
-              },
-            ],
+            inlineData: {
+              mimeType: mimeType || "image/jpeg",
+              data: base64Data,
+            },
+          },
+          {
+            text: KSEB_PROMPT,
           },
         ],
-      });
-      rawText = res.text || "";
-      if (rawText) {
-        console.log(`Successfully parsed bill using model: ${model}`);
-        break;
-      }
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`Model ${model} failed, trying next candidate...`, err.message || err);
-      if (err.message?.includes("API_KEY_INVALID") || err.message?.includes("API key not valid")) {
-        throw new Error("Invalid Gemini API key. Please check your key in Settings or Vercel.");
-      }
-    }
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: "application/json",
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const apiResponse = await res.json();
+  if (apiResponse.error) {
+    throw new Error(apiResponse.error.message || `Gemini API error (${apiResponse.error.code})`);
   }
 
-  if (!rawText && lastError) {
-    throw lastError;
+  const rawText = apiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!rawText) {
+    throw new Error("Gemini returned empty response for this image");
   }
 
   // Clean markdown code blocks if returned
