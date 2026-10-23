@@ -63,10 +63,20 @@ export async function saveDocument(file: File): Promise<SavedFile> {
 
   // If Vercel Blob is configured (recommended for production on Vercel)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await put(`bills/${filename}`, file, {
-      access: "public",
-      addRandomSuffix: false,
-    });
+    let blob;
+    try {
+      // First try 'private' access for private Blob stores
+      blob = await put(`bills/${filename}`, file, {
+        access: "private",
+        addRandomSuffix: false,
+      });
+    } catch (err: any) {
+      // If store is public, fallback gracefully
+      blob = await put(`bills/${filename}`, file, {
+        access: "public",
+        addRandomSuffix: false,
+      });
+    }
 
     return {
       storedFilename: blob.url,
@@ -99,20 +109,54 @@ export async function getDocument(storedFilename: string): Promise<{
   exists: boolean;
   contentType?: string;
 }> {
-  // If stored as a remote cloud blob URL
-  if (storedFilename.startsWith("http://") || storedFilename.startsWith("https://")) {
+  // If stored as a remote cloud blob URL or pathname
+  if (
+    storedFilename.startsWith("http://") ||
+    storedFilename.startsWith("https://") ||
+    storedFilename.startsWith("bills/")
+  ) {
+    // 1. Try private blob retrieval with Vercel Blob token
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const { get } = await import("@vercel/blob");
+        const result = await get(storedFilename, { access: "private" });
+        if (result && result.statusCode === 200 && result.stream) {
+          const chunks: Uint8Array[] = [];
+          const reader = result.stream.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) chunks.push(value);
+          }
+          const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+          const buffer = Buffer.concat(chunks.map((c) => Buffer.from(c)), totalLength);
+          return {
+            buffer,
+            exists: true,
+            contentType: result.blob.contentType || undefined,
+          };
+        }
+      } catch {
+        // Fall through to direct fetch
+      }
+    }
+
+    // 2. Direct fetch fallback (for public blobs)
     try {
       const res = await fetch(storedFilename);
-      if (!res.ok) return { buffer: Buffer.from([]), exists: false };
-      const arrayBuffer = await res.arrayBuffer();
-      return {
-        buffer: Buffer.from(arrayBuffer),
-        exists: true,
-        contentType: res.headers.get("content-type") || undefined,
-      };
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        return {
+          buffer: Buffer.from(arrayBuffer),
+          exists: true,
+          contentType: res.headers.get("content-type") || undefined,
+        };
+      }
     } catch {
-      return { buffer: Buffer.from([]), exists: false };
+      // Ignore
     }
+
+    return { buffer: Buffer.from([]), exists: false };
   }
 
   // Local filesystem fallback
