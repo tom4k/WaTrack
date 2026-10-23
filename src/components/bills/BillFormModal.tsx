@@ -220,6 +220,12 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
     await scanBillPhoto(fileToScan);
   };
 
+  const handleRetry = async () => {
+    if (!selectedFile) return;
+    const fileToScan = await downscaleImage(selectedFile);
+    await scanBillPhoto(fileToScan);
+  };
+
   const scanBillPhoto = async (file: File) => {
     setScanning(true);
     setError(null);
@@ -402,9 +408,24 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         </DialogHeader>
 
         {error && (
-          <div className="mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{error}</span>
+          <div className="mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            {selectedFile && !billToEdit && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleRetry}
+                disabled={scanning}
+                className="shrink-0 text-xs h-7 gap-1.5 border-rose-300 dark:border-rose-700 hover:bg-rose-100 dark:hover:bg-rose-900/50"
+              >
+                <RefreshCw className={`h-3 w-3 ${scanning ? "animate-spin" : ""}`} />
+                Retry Scan
+              </Button>
+            )}
           </div>
         )}
 
@@ -483,16 +504,29 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                     </div>
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={scanning}
-                    className="text-xs shrink-0"
-                  >
-                    Change Photo
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRetry}
+                      disabled={scanning}
+                      className="text-xs gap-1.5"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${scanning ? "animate-spin" : ""}`} />
+                      Retry Scan
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={scanning}
+                      className="text-xs"
+                    >
+                      Change Photo
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

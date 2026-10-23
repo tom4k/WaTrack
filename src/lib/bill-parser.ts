@@ -154,10 +154,17 @@ export async function parseBillImage(
   return await parseWithTesseract(buffer);
 }
 
-async function detectBestModel(apiKey: string): Promise<string> {
+async function detectCandidateModels(apiKey: string): Promise<string[]> {
   if (process.env.GEMINI_MODEL) {
-    return process.env.GEMINI_MODEL;
+    return [process.env.GEMINI_MODEL];
   }
+
+  const preferred = [
+    "gemini-3-flash-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+  ];
 
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
@@ -167,28 +174,14 @@ async function detectBestModel(apiKey: string): Promise<string> {
         .filter((m: any) => m.supportedGenerationMethods?.includes("generateContent"))
         .map((m: any) => m.name.replace(/^models\//, ""));
 
-      const preferred = [
-        "gemini-3.1-flash-lite",
-        "gemini-3-flash-preview",
-        "gemini-3.5-flash",
-        "gemini-3.8-flash",
-        "gemini-flash-latest",
-      ];
-
-      for (const p of preferred) {
-        if (available.includes(p)) return p;
-      }
-
-      const anyFlash = available.find((n: string) => n.includes("flash") && !n.includes("tts"));
-      if (anyFlash) return anyFlash;
-
-      if (available.length > 0) return available[0];
+      const matched = preferred.filter((p) => available.includes(p));
+      if (matched.length > 0) return matched;
     }
   } catch (e) {
-    console.warn("Model auto-detection failed, using default:", e);
+    console.warn("Model auto-detection failed, using default list:", e);
   }
 
-  return "gemini-3.1-flash-lite";
+  return preferred;
 }
 
 async function parseWithGemini(
@@ -196,11 +189,8 @@ async function parseWithGemini(
   mimeType: string,
   apiKey: string
 ): Promise<ParsedBillResult | null> {
-  const model = await detectBestModel(apiKey);
-  console.log(`Using auto-detected Gemini model: ${model}`);
-
+  const models = await detectCandidateModels(apiKey);
   const base64Data = buffer.toString("base64");
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const payload = {
     contents: [
@@ -224,84 +214,105 @@ async function parseWithGemini(
     },
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let lastError: any = null;
 
-  const apiResponse = await res.json();
-  if (apiResponse.error) {
-    throw new Error(apiResponse.error.message || `Gemini API error (${apiResponse.error.code})`);
+  for (const model of models) {
+    try {
+      console.log(`Sending bill slip to Gemini model: ${model}`);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const apiResponse = await res.json();
+      if (apiResponse.error) {
+        console.warn(`Model ${model} returned error:`, apiResponse.error.message);
+        lastError = new Error(apiResponse.error.message || `Gemini API error (${apiResponse.error.code})`);
+        // If it's high demand (503/429) or not found, try the next model!
+        continue;
+      }
+
+      const rawText = apiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!rawText) {
+        lastError = new Error("Gemini returned empty response for this image");
+        continue;
+      }
+
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        lastError = new Error("Could not parse JSON from Gemini response");
+        continue;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      const c = parsed.consumer || {};
+      const b = parsed.bill || {};
+
+      return {
+        success: true,
+        source: "gemini_ai",
+        consumer: {
+          consumerNumber: String(c.consumerNumber || "").replace(/[^0-9]/g, ""),
+          consumerId: c.consumerId ? String(c.consumerId).trim() : null,
+          name: c.name ? String(c.name).trim() : "KSEB Consumer",
+          address: c.address ? String(c.address).trim() : null,
+          phone: c.phone ? String(c.phone).trim() : null,
+          sectionName: c.sectionName ? String(c.sectionName).trim() : "KSEB Electrical Section",
+          sectionPhone: c.sectionPhone ? String(c.sectionPhone).trim() : null,
+          tariff: c.tariff ? String(c.tariff).trim() : "LT-1 Dom",
+          purpose: c.purpose ? String(c.purpose).trim() : "Domestic",
+          category: c.category ? String(c.category).trim() : "DOMESTIC",
+          connectedLoad: c.connectedLoad ? String(c.connectedLoad).trim() : "10 kW",
+          phase: c.phase ? String(c.phase).trim() : "3 Phase",
+          postNumber: c.postNumber ? String(c.postNumber).trim() : null,
+          transformer: c.transformer ? String(c.transformer).trim() : null,
+          meterSerialNumber: c.meterSerialNumber ? String(c.meterSerialNumber).trim() : null,
+          securityDeposit: String(c.securityDeposit || "0.00"),
+        },
+        bill: {
+          billNumber: String(b.billNumber || "").replace(/[^0-9]/g, ""),
+          billArea: b.billArea ? String(b.billArea).trim() : "B02/15/114",
+          billDate: normalizeDate(b.billDate),
+          dueDate: normalizeDate(b.dueDate),
+          disconnectionDate: normalizeDate(b.disconnectionDate),
+          readingTime: b.readingTime ? String(b.readingTime).trim() : null,
+          previousReadingDate: normalizeDate(b.previousReadingDate),
+          currentReadingDate: normalizeDate(b.currentReadingDate),
+          billingCycleDays: Number(b.billingCycleDays || 60),
+          prevReadingNormal: String(b.prevReadingNormal || "0.00"),
+          currReadingNormal: String(b.currReadingNormal || "0.00"),
+          consumedUnitsNormal: String(b.consumedUnitsNormal || "0.00"),
+          prevReadingOffPeak: String(b.prevReadingOffPeak || "0.00"),
+          currReadingOffPeak: String(b.currReadingOffPeak || "0.00"),
+          consumedUnitsOffPeak: String(b.consumedUnitsOffPeak || "0.00"),
+          prevReadingPeak: String(b.prevReadingPeak || "0.00"),
+          currReadingPeak: String(b.currReadingPeak || "0.00"),
+          consumedUnitsPeak: String(b.consumedUnitsPeak || "0.00"),
+          totalUnits: String(b.totalUnits || "0.00"),
+          energyCharge: String(b.energyCharge || "0.00"),
+          duty: String(b.duty || "0.00"),
+          fuelSurcharge: String(b.fuelSurcharge || "0.00"),
+          fixedCharge: String(b.fixedCharge || "500.00"),
+          meterRent: String(b.meterRent || "30.00"),
+          roundOff: String(b.roundOff || "0.00"),
+          arrears: String(b.arrears || "0.00"),
+          totalAmount: String(b.totalAmount || "0.00"),
+          payableAmount: String(b.payableAmount || b.totalAmount || "0.00"),
+          remarks: b.remarks ? String(b.remarks).trim() : null,
+        },
+        rawText,
+      };
+    } catch (err: any) {
+      lastError = err;
+      continue;
+    }
   }
 
-  const rawText = apiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  if (!rawText) {
-    throw new Error("Gemini returned empty response for this image");
-  }
-
-  // Clean markdown code blocks if returned
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return null;
-
-  const data = JSON.parse(jsonMatch[0]);
-  const c = data.consumer || {};
-  const b = data.bill || {};
-
-  return {
-    success: true,
-    source: "gemini_ai",
-    consumer: {
-      consumerNumber: String(c.consumerNumber || "").replace(/[^0-9]/g, ""),
-      consumerId: c.consumerId ? String(c.consumerId).trim() : null,
-      name: c.name ? String(c.name).trim() : "KSEB Consumer",
-      address: c.address ? String(c.address).trim() : null,
-      phone: c.phone ? String(c.phone).trim() : null,
-      sectionName: c.sectionName ? String(c.sectionName).trim() : "KSEB Electrical Section",
-      sectionPhone: c.sectionPhone ? String(c.sectionPhone).trim() : null,
-      tariff: c.tariff ? String(c.tariff).trim() : "LT-1 Dom",
-      purpose: c.purpose ? String(c.purpose).trim() : "Domestic",
-      category: c.category ? String(c.category).trim() : "DOMESTIC",
-      connectedLoad: c.connectedLoad ? String(c.connectedLoad).trim() : "10 kW",
-      phase: c.phase ? String(c.phase).trim() : "3 Phase",
-      postNumber: c.postNumber ? String(c.postNumber).trim() : null,
-      transformer: c.transformer ? String(c.transformer).trim() : null,
-      meterSerialNumber: c.meterSerialNumber ? String(c.meterSerialNumber).trim() : null,
-      securityDeposit: String(c.securityDeposit || "0.00"),
-    },
-    bill: {
-      billNumber: String(b.billNumber || "").replace(/[^0-9]/g, ""),
-      billArea: b.billArea ? String(b.billArea).trim() : "B02/15/114",
-      billDate: normalizeDate(b.billDate),
-      dueDate: normalizeDate(b.dueDate),
-      disconnectionDate: normalizeDate(b.disconnectionDate),
-      readingTime: b.readingTime ? String(b.readingTime).trim() : null,
-      previousReadingDate: normalizeDate(b.previousReadingDate),
-      currentReadingDate: normalizeDate(b.currentReadingDate),
-      billingCycleDays: Number(b.billingCycleDays || 60),
-      prevReadingNormal: String(b.prevReadingNormal || "0.00"),
-      currReadingNormal: String(b.currReadingNormal || "0.00"),
-      consumedUnitsNormal: String(b.consumedUnitsNormal || "0.00"),
-      prevReadingOffPeak: String(b.prevReadingOffPeak || "0.00"),
-      currReadingOffPeak: String(b.currReadingOffPeak || "0.00"),
-      consumedUnitsOffPeak: String(b.consumedUnitsOffPeak || "0.00"),
-      prevReadingPeak: String(b.prevReadingPeak || "0.00"),
-      currReadingPeak: String(b.currReadingPeak || "0.00"),
-      consumedUnitsPeak: String(b.consumedUnitsPeak || "0.00"),
-      totalUnits: String(b.totalUnits || "0.00"),
-      energyCharge: String(b.energyCharge || "0.00"),
-      duty: String(b.duty || "0.00"),
-      fuelSurcharge: String(b.fuelSurcharge || "0.00"),
-      fixedCharge: String(b.fixedCharge || "500.00"),
-      meterRent: String(b.meterRent || "30.00"),
-      roundOff: String(b.roundOff || "0.00"),
-      arrears: String(b.arrears || "0.00"),
-      totalAmount: String(b.totalAmount || "0.00"),
-      payableAmount: String(b.payableAmount || b.totalAmount || "0.00"),
-      remarks: b.remarks ? String(b.remarks).trim() : null,
-    },
-    rawText,
-  };
+  if (lastError) throw lastError;
+  return null;
 }
 
 async function parseWithTesseract(buffer: Buffer): Promise<ParsedBillResult> {
