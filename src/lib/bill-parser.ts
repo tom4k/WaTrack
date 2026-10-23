@@ -168,20 +168,18 @@ async function detectBestModel(apiKey: string): Promise<string> {
         .map((m: any) => m.name.replace(/^models\//, ""));
 
       const preferred = [
+        "gemini-3.1-flash-lite",
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
         "gemini-3.8-flash",
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
         "gemini-flash-latest",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-2.0-flash-exp",
       ];
 
       for (const p of preferred) {
         if (available.includes(p)) return p;
       }
 
-      const anyFlash = available.find((n: string) => n.includes("flash") && !n.includes("8b"));
+      const anyFlash = available.find((n: string) => n.includes("flash") && !n.includes("tts"));
       if (anyFlash) return anyFlash;
 
       if (available.length > 0) return available[0];
@@ -190,7 +188,7 @@ async function detectBestModel(apiKey: string): Promise<string> {
     console.warn("Model auto-detection failed, using default:", e);
   }
 
-  return "gemini-2.0-flash";
+  return "gemini-3.1-flash-lite";
 }
 
 async function parseWithGemini(
