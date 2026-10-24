@@ -67,7 +67,11 @@ export async function POST(req: NextRequest) {
 
       const file = formData.get("file");
       if (file instanceof File && file.size > 0) {
-        savedDoc = await saveDocument(file);
+        try {
+          savedDoc = await saveDocument(file);
+        } catch (saveErr) {
+          console.warn("Could not save physical attachment, proceeding with bill database record:", saveErr);
+        }
       }
     } else {
       data = await req.json();

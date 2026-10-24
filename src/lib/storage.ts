@@ -1,18 +1,38 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { put, del } from "@vercel/blob";
 
 const UPLOADS_DIR = path.join(process.cwd(), "storage", "documents");
+const TMP_UPLOADS_DIR = path.join(os.tmpdir(), "watrack", "documents");
 
-// Ensure directory exists in local environment
-if (!process.env.BLOB_READ_WRITE_TOKEN && !fsSync.existsSync(UPLOADS_DIR)) {
-  try {
-    fsSync.mkdirSync(UPLOADS_DIR, { recursive: true });
-  } catch {
-    // Ignore directory creation failure on serverless read-only filesystems
+export function getLocalUploadsDir(): string {
+  const isServerless =
+    Boolean(process.env.VERCEL) ||
+    Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+    process.cwd().startsWith("/var/task");
+
+  return isServerless ? TMP_UPLOADS_DIR : UPLOADS_DIR;
+}
+
+export function getBlobToken(): string | undefined {
+  return (
+    process.env.BLOB_READ_WRITE_TOKEN ||
+    process.env.VERCEL_BLOB_TOKEN ||
+    process.env.VERCEL_BLOB_READ_WRITE_TOKEN
+  );
+}
+
+// Ensure directory exists in local development
+try {
+  const dir = getLocalUploadsDir();
+  if (!fsSync.existsSync(dir)) {
+    fsSync.mkdirSync(dir, { recursive: true });
   }
+} catch {
+  // Ignore serverless startup mkdir
 }
 
 export const ALLOWED_MIME_TYPES = [
@@ -62,43 +82,62 @@ export async function saveDocument(file: File): Promise<SavedFile> {
   const filename = `${randomId}${ext}`;
 
   // If Vercel Blob is configured (recommended for production on Vercel)
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    let blob;
+  const blobToken = getBlobToken();
+  if (blobToken) {
     try {
-      // First try 'private' access for private Blob stores
-      blob = await put(`bills/${filename}`, file, {
-        access: "private",
-        addRandomSuffix: false,
-      });
-    } catch (err: any) {
-      // If store is public, fallback gracefully
-      blob = await put(`bills/${filename}`, file, {
-        access: "public",
-        addRandomSuffix: false,
-      });
+      let blob;
+      try {
+        blob = await put(`bills/${filename}`, file, {
+          access: "public",
+          token: blobToken,
+          addRandomSuffix: false,
+        });
+      } catch {
+        blob = await put(`bills/${filename}`, file, {
+          access: "private",
+          token: blobToken,
+          addRandomSuffix: false,
+        });
+      }
+
+      if (blob?.url) {
+        return {
+          storedFilename: blob.url,
+          originalFilename: file.name,
+          mimeType,
+          sizeBytes: file.size,
+        };
+      }
+    } catch (blobErr) {
+      console.warn("Vercel blob upload failed, falling back to local storage:", blobErr);
     }
+  }
+
+  // Fallback to local filesystem for development / serverless temp storage
+  const uploadsDir = getLocalUploadsDir();
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+    const targetPath = path.join(uploadsDir, filename);
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    await fs.writeFile(targetPath, buffer);
 
     return {
-      storedFilename: blob.url,
+      storedFilename: filename,
+      originalFilename: file.name,
+      mimeType,
+      sizeBytes: file.size,
+    };
+  } catch (fsErr) {
+    console.warn("Local storage write failed, persisting record without physical file:", fsErr);
+    return {
+      storedFilename: filename,
       originalFilename: file.name,
       mimeType,
       sizeBytes: file.size,
     };
   }
-
-  // Fallback to local filesystem for offline development
-  const targetPath = path.join(UPLOADS_DIR, filename);
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  await fs.writeFile(targetPath, buffer);
-
-  return {
-    storedFilename: filename,
-    originalFilename: file.name,
-    mimeType,
-    sizeBytes: file.size,
-  };
 }
 
 /**
@@ -115,11 +154,11 @@ export async function getDocument(storedFilename: string): Promise<{
     storedFilename.startsWith("https://") ||
     storedFilename.startsWith("bills/")
   ) {
-    // 1. Try private blob retrieval with Vercel Blob token
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const blobToken = getBlobToken();
+    if (blobToken) {
       try {
         const { get } = await import("@vercel/blob");
-        const result = await get(storedFilename, { access: "private" });
+        const result = await get(storedFilename, { access: "private", token: blobToken });
         if (result && result.statusCode === 200 && result.stream) {
           const chunks: Uint8Array[] = [];
           const reader = result.stream.getReader();
@@ -141,7 +180,6 @@ export async function getDocument(storedFilename: string): Promise<{
       }
     }
 
-    // 2. Direct fetch fallback (for public blobs)
     try {
       const res = await fetch(storedFilename);
       if (res.ok) {
@@ -161,34 +199,41 @@ export async function getDocument(storedFilename: string): Promise<{
 
   // Local filesystem fallback
   const sanitized = path.basename(storedFilename);
-  const filePath = path.join(UPLOADS_DIR, sanitized);
+  const dir = getLocalUploadsDir();
+  const filePath = path.join(dir, sanitized);
 
-  if (!fsSync.existsSync(filePath)) {
-    return { buffer: Buffer.from([]), exists: false };
+  if (fsSync.existsSync(filePath)) {
+    const buffer = await fs.readFile(filePath);
+    return { buffer, exists: true };
   }
 
-  const buffer = await fs.readFile(filePath);
-  return { buffer, exists: true };
+  const tmpPath = path.join(TMP_UPLOADS_DIR, sanitized);
+  if (fsSync.existsSync(tmpPath)) {
+    const buffer = await fs.readFile(tmpPath);
+    return { buffer, exists: true };
+  }
+
+  return { buffer: Buffer.from([]), exists: false };
 }
 
 /**
  * Deletes a document if it exists
  */
 export async function deleteDocument(storedFilename: string): Promise<boolean> {
-  // Remote blob deletion
   if (storedFilename.startsWith("http://") || storedFilename.startsWith("https://")) {
     try {
-      await del(storedFilename);
+      const blobToken = getBlobToken();
+      await del(storedFilename, blobToken ? { token: blobToken } : undefined);
       return true;
     } catch {
       return false;
     }
   }
 
-  // Local filesystem deletion
   try {
     const sanitized = path.basename(storedFilename);
-    const filePath = path.join(UPLOADS_DIR, sanitized);
+    const dir = getLocalUploadsDir();
+    const filePath = path.join(dir, sanitized);
     if (fsSync.existsSync(filePath)) {
       await fs.unlink(filePath);
       return true;
