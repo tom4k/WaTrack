@@ -79,7 +79,7 @@ async function ensurePgSchema(): Promise<void> {
           meter_status TEXT DEFAULT 'Working',
           multiplying_factor TEXT DEFAULT '1.00',
           security_deposit TEXT DEFAULT '0.00',
-          is_default INTEGER DEFAULT 1 NOT NULL,
+          is_default BOOLEAN DEFAULT TRUE NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -96,7 +96,7 @@ async function ensurePgSchema(): Promise<void> {
           previous_reading_date TEXT NOT NULL,
           current_reading_date TEXT NOT NULL,
           billing_cycle_days INTEGER DEFAULT 60 NOT NULL,
-          is_bi_monthly INTEGER DEFAULT 1 NOT NULL,
+          is_bi_monthly BOOLEAN DEFAULT TRUE NOT NULL,
           prev_reading_normal TEXT,
           curr_reading_normal TEXT,
           consumed_units_normal TEXT,
@@ -417,6 +417,20 @@ function toPgParams(sql: string): string {
   return sql.replace(/\?/g, () => `$${index++}`);
 }
 
+function sanitizeSqliteParams(params: any[]): any[] {
+  return params.map((p) => (typeof p === "boolean" ? (p ? 1 : 0) : p));
+}
+
+function toBool(val: any): boolean {
+  if (typeof val === "boolean") return val;
+  if (typeof val === "number") return val !== 0;
+  if (typeof val === "string") {
+    const s = val.trim().toLowerCase();
+    return s === "1" || s === "true" || s === "t";
+  }
+  return Boolean(val);
+}
+
 async function dbQueryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
   if (isPostgres && pgPool) {
     await ensurePgSchema();
@@ -424,7 +438,7 @@ async function dbQueryOne<T = any>(sql: string, params: any[] = []): Promise<T |
     return (res.rows[0] as T) || null;
   }
   const sdb = getSqliteDb();
-  const row = sdb.prepare(sql).get(...params);
+  const row = sdb.prepare(sql).get(...sanitizeSqliteParams(params));
   return (row as T) || null;
 }
 
@@ -435,7 +449,7 @@ async function dbQueryAll<T = any>(sql: string, params: any[] = []): Promise<T[]
     return (res.rows as T[]) || [];
   }
   const sdb = getSqliteDb();
-  const rows = sdb.prepare(sql).all(...params);
+  const rows = sdb.prepare(sql).all(...sanitizeSqliteParams(params));
   return (rows as T[]) || [];
 }
 
@@ -445,7 +459,7 @@ async function dbExecute(sql: string, params: any[] = []): Promise<any> {
     return await pgPool.query(toPgParams(sql), params);
   }
   const sdb = getSqliteDb();
-  return sdb.prepare(sql).run(...params);
+  return sdb.prepare(sql).run(...sanitizeSqliteParams(params));
 }
 
 /**
@@ -525,14 +539,18 @@ export const dbService = {
       meterStatus: r.meter_status,
       multiplyingFactor: r.multiplying_factor,
       securityDeposit: r.security_deposit,
-      isDefault: Boolean(Number(r.is_default)),
+      isDefault: toBool(r.is_default),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
   },
 
   async getDefaultConsumer() {
-    let row = await dbQueryOne<any>("SELECT * FROM consumers WHERE is_default = 1 LIMIT 1");
+    let row = await dbQueryOne<any>(
+      isPostgres
+        ? "SELECT * FROM consumers WHERE is_default = TRUE LIMIT 1"
+        : "SELECT * FROM consumers WHERE is_default = 1 LIMIT 1"
+    );
     if (!row) {
       row = await dbQueryOne<any>("SELECT * FROM consumers LIMIT 1");
     }
@@ -557,7 +575,7 @@ export const dbService = {
       meterStatus: row.meter_status,
       multiplyingFactor: row.multiplying_factor,
       securityDeposit: row.security_deposit,
-      isDefault: Boolean(Number(row.is_default)),
+      isDefault: toBool(row.is_default),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -586,7 +604,7 @@ export const dbService = {
       meterStatus: row.meter_status,
       multiplyingFactor: row.multiplying_factor,
       securityDeposit: row.security_deposit,
-      isDefault: Boolean(Number(row.is_default)),
+      isDefault: toBool(row.is_default),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -620,7 +638,7 @@ export const dbService = {
       meterStatus: row.meter_status,
       multiplyingFactor: row.multiplying_factor,
       securityDeposit: row.security_deposit,
-      isDefault: Boolean(Number(row.is_default)),
+      isDefault: toBool(row.is_default),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -631,7 +649,11 @@ export const dbService = {
     const now = new Date().toISOString();
 
     if (data.isDefault) {
-      await dbExecute("UPDATE consumers SET is_default = 0");
+      await dbExecute(
+        isPostgres
+          ? "UPDATE consumers SET is_default = FALSE"
+          : "UPDATE consumers SET is_default = 0"
+      );
     }
 
     await dbExecute(`
@@ -647,7 +669,7 @@ export const dbService = {
       data.category ?? "DOMESTIC", data.connectedLoad ?? "10 kW", data.phase ?? "3 Phase",
       data.postNumber ?? null, data.transformer ?? null, data.meterSerialNumber ?? null,
       data.meterStatus ?? "Working", String(data.multiplyingFactor ?? "1.00"), String(data.securityDeposit ?? "0.00"),
-      data.isDefault ? 1 : 0, now, now
+      isPostgres ? Boolean(data.isDefault) : (data.isDefault ? 1 : 0), now, now
     ]);
     return this.getConsumerById(id);
   },
@@ -656,7 +678,12 @@ export const dbService = {
     const now = new Date().toISOString();
 
     if (data.isDefault) {
-      await dbExecute("UPDATE consumers SET is_default = 0 WHERE id != ?", [id]);
+      await dbExecute(
+        isPostgres
+          ? "UPDATE consumers SET is_default = FALSE WHERE id != ?"
+          : "UPDATE consumers SET is_default = 0 WHERE id != ?",
+        [id]
+      );
     }
 
     await dbExecute(`
@@ -673,7 +700,7 @@ export const dbService = {
       data.category ?? "DOMESTIC", data.connectedLoad ?? "10 kW", data.phase ?? "3 Phase",
       data.postNumber ?? null, data.transformer ?? null, data.meterSerialNumber ?? null,
       data.meterStatus ?? "Working", String(data.multiplyingFactor ?? "1.00"), String(data.securityDeposit ?? "0.00"),
-      data.isDefault ? 1 : 0, now, id
+      isPostgres ? Boolean(data.isDefault) : (data.isDefault ? 1 : 0), now, id
     ]);
     return this.getConsumerById(id);
   },
@@ -762,7 +789,8 @@ export const dbService = {
     `, [
       id, data.consumerId, data.billNumber, data.billArea ?? null, data.billDate, data.dueDate,
       data.disconnectionDate ?? null, data.readingTime ?? null, data.previousReadingDate, data.currentReadingDate,
-      Number(data.billingCycleDays || 60), data.isBiMonthly ? 1 : 0,
+      Number(data.billingCycleDays || 60),
+      isPostgres ? (data.isBiMonthly !== false) : (data.isBiMonthly !== false ? 1 : 0),
       r_num(data.prevReadingNormal), r_num(data.currReadingNormal), r_num(data.consumedUnitsNormal),
       r_num(data.prevReadingOffPeak), r_num(data.currReadingOffPeak), r_num(data.consumedUnitsOffPeak),
       r_num(data.prevReadingPeak), r_num(data.currReadingPeak), r_num(data.consumedUnitsPeak),
@@ -820,7 +848,9 @@ export const dbService = {
       data.previousReadingDate ?? current.previousReadingDate,
       data.currentReadingDate ?? current.currentReadingDate,
       Number(data.billingCycleDays ?? current.billingCycleDays),
-      (data.isBiMonthly !== undefined ? data.isBiMonthly : current.isBiMonthly) ? 1 : 0,
+      isPostgres
+        ? Boolean(data.isBiMonthly !== undefined ? data.isBiMonthly : current.isBiMonthly)
+        : ((data.isBiMonthly !== undefined ? data.isBiMonthly : current.isBiMonthly) ? 1 : 0),
       r_num(data.prevReadingNormal ?? current.prevReadingNormal),
       r_num(data.currReadingNormal ?? current.currReadingNormal),
       r_num(data.consumedUnitsNormal ?? current.consumedUnitsNormal),
@@ -1043,7 +1073,7 @@ export const dbService = {
         SAMPLE_CONSUMER.phase, SAMPLE_CONSUMER.postNumber, SAMPLE_CONSUMER.transformer,
         SAMPLE_CONSUMER.meterSerialNumber, SAMPLE_CONSUMER.meterStatus,
         SAMPLE_CONSUMER.multiplyingFactor, SAMPLE_CONSUMER.securityDeposit,
-        SAMPLE_CONSUMER.isDefault ? 1 : 0, now, now
+        isPostgres ? Boolean(SAMPLE_CONSUMER.isDefault) : (SAMPLE_CONSUMER.isDefault ? 1 : 0), now, now
       ]);
       return true;
     }
@@ -1083,7 +1113,7 @@ function mapBillRow(r: any, dynamicStatus: string) {
     previousReadingDate: r.previous_reading_date,
     currentReadingDate: r.current_reading_date,
     billingCycleDays: r.billing_cycle_days,
-    isBiMonthly: Boolean(Number(r.is_bi_monthly)),
+    isBiMonthly: toBool(r.is_bi_monthly),
     prevReadingNormal: r.prev_reading_normal,
     currReadingNormal: r.curr_reading_normal,
     consumedUnitsNormal: r.consumed_units_normal,
