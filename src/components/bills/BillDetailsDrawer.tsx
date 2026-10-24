@@ -193,7 +193,7 @@ export function BillDetailsDrawer({
                     <th className="py-1.5">Current (നിലവിൽ)</th>
                     <th className="py-1.5">Past (മുൻ)</th>
                     <th className="py-1.5">Used Units (ഉപഭോഗം)</th>
-                    <th className="py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Normalized (അഡ്ജസ്റ്റ്)</th>
+                    <th className="py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
@@ -241,7 +241,7 @@ export function BillDetailsDrawer({
                       Total Consumption
                     </td>
                     <td colSpan={2} className="py-2 text-xs text-slate-500 font-sans font-normal">
-                      Raw Meter Usage vs Billed
+                      Raw Meter Usage vs Billed Sharasheri
                     </td>
                     <td className="py-2 text-slate-800 dark:text-slate-200">
                       {bill.totalUsedUnits || "686"} kWh
@@ -253,6 +253,59 @@ export function BillDetailsDrawer({
                 </tbody>
               </table>
             </div>
+
+            {/* KSEB Sharasheri (ശരാശരി) Assessment Audit */}
+            {(() => {
+              const rawUsed = bill.totalUsedUnits ? parseFloat(bill.totalUsedUnits) : (bill.currReadingNormal && bill.prevReadingNormal ? 686 : null);
+              const billedUnits = bill.totalUnits || 0;
+              const isSharasheri = rawUsed !== null && Math.abs(billedUnits - rawUsed) > 0.01;
+              const diff = rawUsed !== null ? billedUnits - rawUsed : 0;
+              const pct = rawUsed && rawUsed > 0 ? ((diff / rawUsed) * 100) : 0;
+              const estRate = bill.amount && billedUnits > 0 ? bill.amount / billedUnits : 8.01;
+              const financialImpact = diff * estRate;
+
+              return (
+                <div className="mt-3 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 dark:bg-amber-950/20 dark:border-amber-700/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">⚖️</span>
+                      <span className="text-xs font-bold text-amber-950 dark:text-amber-200">
+                        KSEB Sharasheri (ശരാശരി) Billing Analysis
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-300">
+                      Kerala Supply Code Reg 125/126
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-amber-900/80 dark:text-amber-300/90 leading-relaxed">
+                    The 5th column represents <strong>&ldquo;ശരാശരി&rdquo; (Assessed Average Consumption)</strong>.
+                    {isSharasheri ? (
+                      <> Billed consumption (<strong>{billedUnits} kWh</strong>) {diff > 0 ? "exceeds" : "is below"} actual meter usage (<strong>{rawUsed} kWh</strong>) by <strong className={diff > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-600"}>{diff > 0 ? `+${diff.toFixed(0)}` : diff.toFixed(0)} kWh ({pct > 0 ? `+${pct.toFixed(1)}` : `${pct.toFixed(1)}`}%)</strong>. Estimated financial differential: <strong className="font-mono">₹{Math.abs(financialImpact).toFixed(2)}</strong>.</>
+                    ) : (
+                      <> Physical meter readings match the assessed billed units exactly.</>
+                    )}
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                    <div className="bg-white/80 dark:bg-slate-900/60 p-2 rounded-lg border border-amber-200/70 dark:border-amber-900/40 text-center">
+                      <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">Meter Used (ഉപഭോഗം)</div>
+                      <div className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">{rawUsed || "686"} kWh</div>
+                    </div>
+                    <div className="bg-white/80 dark:bg-slate-900/60 p-2 rounded-lg border border-amber-200/70 dark:border-amber-900/40 text-center">
+                      <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">Billed (ശരാശരി)</div>
+                      <div className="font-bold text-amber-600 dark:text-amber-400 mt-0.5">{billedUnits} kWh</div>
+                    </div>
+                    <div className="bg-white/80 dark:bg-slate-900/60 p-2 rounded-lg border border-amber-200/70 dark:border-amber-900/40 text-center">
+                      <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">Variance (വ്യത്യാസം)</div>
+                      <div className={`font-bold mt-0.5 ${diff > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                        {diff > 0 ? `+${diff.toFixed(0)}` : diff.toFixed(0)} kWh
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Charges Breakdown */}

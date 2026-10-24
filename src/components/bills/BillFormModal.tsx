@@ -644,7 +644,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             <th className="p-1.5">Current (നിലവിൽ)</th>
                             <th className="p-1.5">Past (മുൻ)</th>
                             <th className="p-1.5 text-slate-700 dark:text-slate-300 font-bold">Used (ഉപഭോഗം)</th>
-                            <th className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Normalized (അഡ്ജസ്റ്റ്)</th>
+                            <th className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
@@ -823,7 +823,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                     Time-Of-Day (TOD) Meter Readings (റീഡിങ്ങും ഉപഭോഗവും)
                   </span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Enter current reading and past reading to auto-calculate used units, or adjust normalized units directly.
+                    Enter current reading and past reading to auto-calculate used units, or adjust ശരാശരി (Sharasheri average) units directly.
                   </p>
                 </div>
 
@@ -835,7 +835,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                         <th className="py-1">Current (നിലവിൽ)</th>
                         <th className="py-1">Past (മുൻ)</th>
                         <th className="py-1">Used (ഉപഭോഗം)</th>
-                        <th className="py-1 text-emerald-600 dark:text-emerald-400">Normalized (അഡ്ജസ്റ്റ്)</th>
+                        <th className="py-1 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">

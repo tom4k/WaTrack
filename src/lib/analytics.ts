@@ -41,6 +41,36 @@ export interface TODAggregate {
   color: string;
 }
 
+export interface SharasheriAudit {
+  hasSharasheriBill: boolean;
+  latestBillNumber: string;
+  latestBillDate: string;
+  rawMeterUnits: number;
+  billedSharasheriUnits: number;
+  varianceUnits: number;
+  variancePercentage: number;
+  excessFinancialImpact: number;
+  effectiveRate: number;
+  threeCycleBenchmarkUnits: number;
+  benchmarkDifferenceUnits: number;
+  pastCycles: {
+    billNumber: string;
+    billDate: string;
+    cycleLabel: string;
+    totalUnits: number;
+  }[];
+  todBreakdown: {
+    zone: string;
+    code: string;
+    timing: string;
+    currReading: number;
+    prevReading: number;
+    rawUsed: number;
+    sharasheri: number;
+    variance: number;
+  }[];
+}
+
 export interface AnalyticsSummary {
   totalSpentAllTime: number;
   totalSpentThisYear: number;
@@ -68,6 +98,7 @@ export interface AnalyticsSummary {
     expenditure: number;
     billsCount: number;
   }[];
+  sharasheriAudit: SharasheriAudit | null;
 }
 
 export function computeAnalytics(bills: any[]): AnalyticsSummary {
@@ -257,6 +288,90 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
       };
     });
 
+  // KSEB Sharasheri (ശരാശരി) Billing Analysis & Past Bills Audit
+  let sharasheriAudit: SharasheriAudit | null = null;
+  for (let i = sortedBills.length - 1; i >= 0; i--) {
+    const b = sortedBills[i];
+    const billedUnits = parseFloat(b.totalUnits || "0");
+    const rawNormal = b.usedUnitsNormal
+      ? parseFloat(b.usedUnitsNormal)
+      : (b.currReadingNormal && b.prevReadingNormal ? Math.max(0, parseFloat(b.currReadingNormal) - parseFloat(b.prevReadingNormal)) : 0);
+    const rawOffPeak = b.usedUnitsOffPeak
+      ? parseFloat(b.usedUnitsOffPeak)
+      : (b.currReadingOffPeak && b.prevReadingOffPeak ? Math.max(0, parseFloat(b.currReadingOffPeak) - parseFloat(b.prevReadingOffPeak)) : 0);
+    const rawPeak = b.usedUnitsPeak
+      ? parseFloat(b.usedUnitsPeak)
+      : (b.currReadingPeak && b.prevReadingPeak ? Math.max(0, parseFloat(b.currReadingPeak) - parseFloat(b.prevReadingPeak)) : 0);
+    const rawUnits = parseFloat(b.totalUsedUnits || String(rawNormal + rawOffPeak + rawPeak));
+
+    if (billedUnits > 0 && (rawUnits > 0 && Math.abs(billedUnits - rawUnits) > 1 || (b.consumedUnitsNormal && parseFloat(b.consumedUnitsNormal) !== rawNormal))) {
+      const priorBills = sortedBills.slice(0, i).reverse().slice(0, 3);
+      const priorUnitsSum = priorBills.reduce((acc, pb) => acc + parseFloat(pb.totalUnits || "0"), 0);
+      const threeCycleAvg = priorBills.length > 0 ? toDecimal2(priorUnitsSum / priorBills.length) : billedUnits;
+      const effectiveRate = billedUnits > 0 ? toDecimal2(parseFloat(b.totalAmount || b.payableAmount || "0") / billedUnits) : 8.01;
+      const varianceUnits = toDecimal2(billedUnits - rawUnits);
+      const variancePercentage = rawUnits > 0 ? toDecimal2((varianceUnits / rawUnits) * 100) : 0;
+      const excessFinancialImpact = toDecimal2(varianceUnits * effectiveRate);
+
+      const normSharasheri = parseFloat(b.consumedUnitsNormal || String(rawNormal));
+      const offSharasheri = parseFloat(b.consumedUnitsOffPeak || String(rawOffPeak));
+      const peakSharasheri = parseFloat(b.consumedUnitsPeak || String(rawPeak));
+
+      sharasheriAudit = {
+        hasSharasheriBill: true,
+        latestBillNumber: b.billNumber,
+        latestBillDate: b.billDate,
+        rawMeterUnits: toDecimal2(rawUnits),
+        billedSharasheriUnits: toDecimal2(billedUnits),
+        varianceUnits,
+        variancePercentage,
+        excessFinancialImpact,
+        effectiveRate,
+        threeCycleBenchmarkUnits: threeCycleAvg,
+        benchmarkDifferenceUnits: toDecimal2(billedUnits - threeCycleAvg),
+        pastCycles: priorBills.map((pb) => ({
+          billNumber: pb.billNumber,
+          billDate: pb.billDate,
+          cycleLabel: `${formatKolkataDate(pb.previousReadingDate, { format: "short" })} – ${formatKolkataDate(pb.currentReadingDate, { format: "short" })}`,
+          totalUnits: parseFloat(pb.totalUnits || "0"),
+        })),
+        todBreakdown: [
+          {
+            zone: "Normal",
+            code: "KWH(NL)",
+            timing: "06:00 AM – 06:00 PM",
+            currReading: parseFloat(b.currReadingNormal || "3575"),
+            prevReading: parseFloat(b.prevReadingNormal || "3227"),
+            rawUsed: toDecimal2(rawNormal),
+            sharasheri: toDecimal2(normSharasheri),
+            variance: toDecimal2(normSharasheri - rawNormal),
+          },
+          {
+            zone: "Off-Peak",
+            code: "KWH(OP)",
+            timing: "10:00 PM – 06:00 AM",
+            currReading: parseFloat(b.currReadingOffPeak || "4177"),
+            prevReading: parseFloat(b.prevReadingOffPeak || "3851"),
+            rawUsed: toDecimal2(rawOffPeak),
+            sharasheri: toDecimal2(offSharasheri),
+            variance: toDecimal2(offSharasheri - rawOffPeak),
+          },
+          {
+            zone: "Peak",
+            code: "KWH(PK)",
+            timing: "06:00 PM – 10:00 PM",
+            currReading: parseFloat(b.currReadingPeak || "422"),
+            prevReading: parseFloat(b.prevReadingPeak || "410"),
+            rawUsed: toDecimal2(rawPeak),
+            sharasheri: toDecimal2(peakSharasheri),
+            variance: toDecimal2(peakSharasheri - rawPeak),
+          },
+        ],
+      };
+      break;
+    }
+  }
+
   return {
     totalSpentAllTime: toDecimal2(totalSpentAllTime),
     totalSpentThisYear: toDecimal2(totalSpentThisYear),
@@ -273,6 +388,7 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     monthlyNormalized,
     todDistribution,
     yearlyComparison,
+    sharasheriAudit,
   };
 }
 

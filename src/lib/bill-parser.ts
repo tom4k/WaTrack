@@ -73,7 +73,7 @@ In the meter reading table titled "റീഡിങ്ങും ഉപഭോഗ�
 - "നിലവിൽ" is the Current Reading (currReading)
 - "മുൻ" is the Past / Previous Reading (prevReading)
 - "ഉപഭോഗം" is the actual raw Units Used (usedUnits = current reading minus past reading)
-- "അഡ്ജസ്റ്റ്" / "ചാർജ്ജ്" is the Normalized / Billed Units (consumedUnits)
+- "ശരാശരി" is the Assessed Average / Sharasheri Units on which bill is charged (consumedUnits)
 
 Return ONLY a clean JSON object with this exact shape:
 {
@@ -109,17 +109,17 @@ Return ONLY a clean JSON object with this exact shape:
     "prevReadingNormal": "Past reading for Normal zone (from മുൻ column), e.g. 3227.00",
     "currReadingNormal": "Current reading for Normal zone (from നിലവിൽ column), e.g. 3575.00",
     "usedUnitsNormal": "Actual raw used units for Normal zone (from ഉപഭോഗം column), e.g. 348.00",
-    "consumedUnitsNormal": "Normalized / billed units for Normal zone (from അഡ്ജസ്റ്റ് column), e.g. 402.00",
+    "consumedUnitsNormal": "Sharasheri (ശരാശരി) average billed units for Normal zone, e.g. 402.00",
     "prevReadingOffPeak": "Past reading for Off-Peak zone (from മുൻ column), e.g. 3851.00",
     "currReadingOffPeak": "Current reading for Off-Peak zone (from നിലവിൽ column), e.g. 4177.00",
     "usedUnitsOffPeak": "Actual raw used units for Off-Peak zone (from ഉപഭോഗം column), e.g. 326.00",
-    "consumedUnitsOffPeak": "Normalized / billed units for Off-Peak zone (from അഡ്ജസ്റ്റ് column), e.g. 322.00",
+    "consumedUnitsOffPeak": "Sharasheri (ശരാശരി) average billed units for Off-Peak zone, e.g. 322.00",
     "prevReadingPeak": "Past reading for Peak zone (from മുൻ column), e.g. 410.00",
     "currReadingPeak": "Current reading for Peak zone (from നിലവിൽ column), e.g. 422.00",
     "usedUnitsPeak": "Actual raw used units for Peak zone (from ഉപഭോഗം column), e.g. 12.00",
-    "consumedUnitsPeak": "Normalized / billed units for Peak zone (from അഡ്ജസ്റ്റ് column), e.g. 28.00",
+    "consumedUnitsPeak": "Sharasheri (ശരാശരി) average billed units for Peak zone, e.g. 28.00",
     "totalUsedUnits": "Total raw units used (sum of used units: 348 + 326 + 12), e.g. 686.00",
-    "totalUnits": "Total billed / normalized units (sum of billed units: 402 + 322 + 28), e.g. 752.00",
+    "totalUnits": "Total billed / Sharasheri units (sum of billed units: 402 + 322 + 28), e.g. 752.00",
     "energyCharge": "e.g. 4971.92",
     "duty": "e.g. 497.19",
     "fuelSurcharge": "e.g. 20.58",

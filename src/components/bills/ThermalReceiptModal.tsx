@@ -272,7 +272,7 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                   <th className="py-0.5">നിലവിൽ</th>
                   <th className="py-0.5">മുൻ</th>
                   <th className="py-0.5">ഉപഭോഗം</th>
-                  <th className="py-0.5">അഡ്ജസ്റ്റ്</th>
+                  <th className="py-0.5">ശരാശരി</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -319,7 +319,7 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                 </tr>
                 <tr className="border-t-2 border-slate-800 font-bold text-slate-950">
                   <td colSpan={3} className="text-left py-1 text-[11px]">
-                    ചാർജ്ജ് ചെയ്ത യൂണിറ്റ് (Billed kWh):
+                    ശരാശരി ഉപഭോഗം (Billed Sharasheri):
                   </td>
                   <td colSpan={2} className="font-mono text-xs py-1">
                     {formatIndianNumber(bill.totalUnits, 0)} kWh
