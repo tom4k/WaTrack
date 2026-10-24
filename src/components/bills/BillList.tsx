@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatINR, formatKolkataDate, formatUnits, getDueStatus } from "@/lib/formatters";
+import { detectBillingComputation } from "@/lib/billing-audit";
 import { BillDetailsDrawer } from "./BillDetailsDrawer";
 import { ThermalReceiptModal } from "./ThermalReceiptModal";
 import { RecordPaymentModal } from "@/components/payments/RecordPaymentModal";
@@ -209,7 +210,26 @@ export function BillList({
                         <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                           {formatUnits(b.totalUnits)}
                         </span>
-                        <div className="text-[10px] text-slate-400 font-mono">
+                        {(() => {
+                          const audit = detectBillingComputation(b);
+                          if (audit.isAverageUsed) {
+                            return (
+                              <div className="mt-0.5">
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                  ⚖️ ശരാശരി (Avg)
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="mt-0.5">
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-100/70 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                ⚡ Meter Units
+                              </span>
+                            </div>
+                          );
+                        })()}
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                           {b.billingCycleDays || 60} days
                         </div>
                       </td>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Upload,
   Camera,
@@ -16,11 +16,14 @@ import {
   Zap,
   FileText,
   Image as ImageIcon,
+  CheckCircle2,
+  Scale,
 } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { formatINR, toDecimal2 } from "@/lib/formatters";
+import { detectBillingComputation } from "@/lib/billing-audit";
 
 async function downscaleImage(file: File, maxDim = 1200): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
@@ -206,6 +209,50 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
       setConsumerData(null);
     }
   }, [open, billToEdit]);
+
+  // Live Detection of whether bill was computed on Raw Units or Average Units
+  const liveAudit = useMemo(() => {
+    return detectBillingComputation({
+      currReadingNormal,
+      prevReadingNormal,
+      usedUnitsNormal,
+      consumedUnitsNormal,
+      currReadingOffPeak,
+      prevReadingOffPeak,
+      usedUnitsOffPeak,
+      consumedUnitsOffPeak,
+      currReadingPeak,
+      prevReadingPeak,
+      usedUnitsPeak,
+      consumedUnitsPeak,
+      totalUsedUnits,
+      totalUnits,
+      energyCharge,
+      fuelSurcharge,
+      payableAmount: payableAmount || totalAmount,
+      remarks,
+    });
+  }, [
+    currReadingNormal,
+    prevReadingNormal,
+    usedUnitsNormal,
+    consumedUnitsNormal,
+    currReadingOffPeak,
+    prevReadingOffPeak,
+    usedUnitsOffPeak,
+    consumedUnitsOffPeak,
+    currReadingPeak,
+    prevReadingPeak,
+    usedUnitsPeak,
+    consumedUnitsPeak,
+    totalUsedUnits,
+    totalUnits,
+    energyCharge,
+    fuelSurcharge,
+    payableAmount,
+    totalAmount,
+    remarks,
+  ]);
 
   // Handle Photo Upload and Trigger Scanning
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -624,6 +671,63 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                   </div>
                 </div>
 
+                {/* Real-Time Billing Computation Basis Detection Banner */}
+                {liveAudit && (liveAudit.rawMeterUnits > 0 || liveAudit.sharasheriUnits > 0) && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs space-y-2 transition-all ${
+                      liveAudit.isAverageUsed
+                        ? "bg-amber-500/10 border-amber-500/30 dark:bg-amber-950/20 dark:border-amber-700/50 text-amber-950 dark:text-amber-200"
+                        : "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-950/20 dark:border-emerald-700/50 text-emerald-950 dark:text-emerald-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        {liveAudit.isAverageUsed ? (
+                          <>
+                            <span className="text-base">⚖️</span>
+                            <span>KSEB Average Used (&ldquo;ശരാശരി&rdquo; Detected)</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <span>Billed on Actual Physical Meter Reading</span>
+                          </>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          liveAudit.isAverageUsed
+                            ? "bg-amber-200/90 dark:bg-amber-900/60 text-amber-950 dark:text-amber-200"
+                            : "bg-emerald-200/90 dark:bg-emerald-900/60 text-emerald-950 dark:text-emerald-200"
+                        }`}
+                      >
+                        {liveAudit.isAverageUsed ? "Average Surcharged" : "Raw Meter Verified"}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] leading-relaxed opacity-90">
+                      {liveAudit.reason}
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-current/10 font-mono text-[11px] text-center">
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-1.5 rounded">
+                        <span className="text-[9px] opacity-70 block font-sans uppercase">Physical Meter</span>
+                        <strong>{liveAudit.rawMeterUnits} kWh</strong>
+                      </div>
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-1.5 rounded">
+                        <span className="text-[9px] opacity-70 block font-sans uppercase">ശരാശരി Benchmark</span>
+                        <strong>{liveAudit.sharasheriUnits} kWh</strong>
+                      </div>
+                      <div className="bg-white/60 dark:bg-slate-900/50 p-1.5 rounded">
+                        <span className="text-[9px] opacity-70 block font-sans uppercase">Variance</span>
+                        <strong className={liveAudit.isAverageUsed ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}>
+                          {liveAudit.varianceUnits > 0 ? `+${liveAudit.varianceUnits}` : liveAudit.varianceUnits} kWh
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Meter Readings & TOD Breakdown Table */}
                 {(currReadingNormal || prevReadingNormal || consumedUnitsNormal || totalUnits) && (
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
@@ -823,9 +927,48 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                     Time-Of-Day (TOD) Meter Readings (റീഡിങ്ങും ഉപഭോഗവും)
                   </span>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Enter current reading and past reading to auto-calculate used units, or adjust ശരാശരി (Sharasheri average) units directly.
+                    Physical meter readings (used units) and Sharasheri benchmark.
                   </p>
                 </div>
+
+                {/* Real-Time Billing Computation Basis Detection Banner */}
+                {liveAudit && (liveAudit.rawMeterUnits > 0 || liveAudit.sharasheriUnits > 0) && (
+                  <div
+                    className={`p-3 rounded-xl border text-xs space-y-1.5 transition-all ${
+                      liveAudit.isAverageUsed
+                        ? "bg-amber-500/10 border-amber-500/30 dark:bg-amber-950/20 dark:border-amber-700/50 text-amber-950 dark:text-amber-200"
+                        : "bg-emerald-500/10 border-emerald-500/30 dark:bg-emerald-950/20 dark:border-emerald-700/50 text-emerald-950 dark:text-emerald-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        {liveAudit.isAverageUsed ? (
+                          <>
+                            <span className="text-base">⚖️</span>
+                            <span>KSEB Average Used (&ldquo;ശരാശരി&rdquo; Detected)</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>Billed on Actual Physical Meter</span>
+                          </>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          liveAudit.isAverageUsed
+                            ? "bg-amber-200/90 dark:bg-amber-900/60 text-amber-950 dark:text-amber-200"
+                            : "bg-emerald-200/90 dark:bg-emerald-900/60 text-emerald-950 dark:text-emerald-200"
+                        }`}
+                      >
+                        {liveAudit.isAverageUsed ? "Average Surcharged" : "Raw Meter Verified"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed opacity-90">
+                      {liveAudit.reason}
+                    </p>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs">
