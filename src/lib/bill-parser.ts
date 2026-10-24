@@ -141,7 +141,7 @@ Return ONLY a clean JSON object with this exact shape:
     "usedUnitsPeak": "Actual raw used units for Peak zone, e.g. 12.00",
     "consumedUnitsPeak": "Sharasheri (ശരാശരി) average billed units for Peak zone, e.g. 28.00",
     "totalUsedUnits": "Total raw units used (sum of used units: 348 + 326 + 12), e.g. 686.00",
-    "totalUnits": "Total billed / Sharasheri units (sum of billed units: 402 + 322 + 28), e.g. 752.00",
+    "totalUnits": "Total actual units on which the bill charges are calculated (if meter is Working, this equals raw used units 686.00; if average billed, 752.00), e.g. 686.00",
     "energyCharge": "e.g. 4971.92",
     "duty": "e.g. 497.19",
     "fuelSurcharge": "e.g. 20.58",
@@ -308,7 +308,7 @@ async function parseWithGemini(
         : (parseFloat(usedNorm) + parseFloat(usedOff) + parseFloat(usedPk)).toFixed(2);
       const totUnits = b.totalUnits
         ? String(b.totalUnits)
-        : (parseFloat(normNorm) + parseFloat(normOff) + parseFloat(normPk)).toFixed(2);
+        : totUsed;
 
       return {
         success: true,

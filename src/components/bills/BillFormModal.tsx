@@ -686,13 +686,13 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                               Total
                             </td>
                             <td colSpan={2} className="p-1.5 text-[10px] text-slate-500 font-sans font-normal">
-                              Raw Used vs Billed
+                              Billed Meter vs Benchmark Profile
                             </td>
-                            <td className="p-1.5 text-slate-900 dark:text-slate-100">
+                            <td className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
                               {totalUsedUnits || "686"} kWh
                             </td>
-                            <td className="p-1.5 text-emerald-600 dark:text-emerald-400 text-xs">
-                              {totalUnits} kWh
+                            <td className="p-1.5 text-slate-500 text-xs">
+                              {consumedUnitsNormal ? (parseFloat(consumedUnitsNormal) + parseFloat(consumedUnitsOffPeak || "0") + parseFloat(consumedUnitsPeak || "0")).toFixed(0) : "752"} kWh
                             </td>
                           </tr>
                         </tbody>

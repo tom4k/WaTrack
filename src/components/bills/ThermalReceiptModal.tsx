@@ -309,20 +309,20 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                     {formatIndianNumber(bill.consumedUnitsPeak || 28, 0)}
                   </td>
                 </tr>
-                <tr className="border-t border-slate-400 text-slate-700">
-                  <td colSpan={3} className="text-left py-0.5 text-[9px]">
-                    ആകെ ഉപഭോഗം (Raw Used Units):
-                  </td>
-                  <td colSpan={2} className="font-mono text-[10px] py-0.5 font-semibold">
-                    {formatIndianNumber(bill.totalUsedUnits || 686, 0)} kWh
-                  </td>
-                </tr>
                 <tr className="border-t-2 border-slate-800 font-bold text-slate-950">
                   <td colSpan={3} className="text-left py-1 text-[11px]">
-                    ശരാശരി ഉപഭോഗം (Billed Sharasheri):
+                    ചാർജ്ജ് ചെയ്ത യൂണിറ്റ് (Billed Units):
                   </td>
                   <td colSpan={2} className="font-mono text-xs py-1">
-                    {formatIndianNumber(bill.totalUnits, 0)} kWh
+                    {formatIndianNumber(bill.totalUnits || bill.totalUsedUnits || 686, 0)} kWh
+                  </td>
+                </tr>
+                <tr className="border-t border-slate-300 text-slate-700">
+                  <td colSpan={3} className="text-left py-0.5 text-[9px]">
+                    ശരാശരി ബെഞ്ച്മാർക്ക് (Benchmark Profile):
+                  </td>
+                  <td colSpan={2} className="font-mono text-[10px] py-0.5">
+                    {bill.consumedUnitsNormal ? (parseFloat(bill.consumedUnitsNormal) + parseFloat(bill.consumedUnitsOffPeak || "0") + parseFloat(bill.consumedUnitsPeak || "0")).toFixed(0) : "752"} kWh
                   </td>
                 </tr>
               </tbody>
