@@ -32,13 +32,17 @@ export interface ExtractedBill {
   billingCycleDays: number;
   prevReadingNormal: string;
   currReadingNormal: string;
+  usedUnitsNormal: string;
   consumedUnitsNormal: string;
   prevReadingOffPeak: string;
   currReadingOffPeak: string;
+  usedUnitsOffPeak: string;
   consumedUnitsOffPeak: string;
   prevReadingPeak: string;
   currReadingPeak: string;
+  usedUnitsPeak: string;
   consumedUnitsPeak: string;
+  totalUsedUnits: string;
   totalUnits: string;
   energyCharge: string;
   duty: string;
@@ -63,6 +67,13 @@ export interface ParsedBillResult {
 const KSEB_PROMPT = `
 You are an expert Kerala State Electricity Board (KSEB) electricity bill slip scanner.
 Analyze this KSEB thermal spot bill notice (which contains Malayalam and English headers) and extract all information accurately into JSON format.
+
+In the meter reading table titled "റീഡിങ്ങും ഉപഭോഗവും (MM)":
+- "യൂണിറ്റ്" is the time zone: KWH(NL) [Normal zone 06:00-18:00], KWH(OP) [Off-Peak zone 22:00-06:00], KWH(PK) [Peak zone 18:00-22:00]
+- "നിലവിൽ" is the Current Reading (currReading)
+- "മുൻ" is the Past / Previous Reading (prevReading)
+- "ഉപഭോഗം" is the actual raw Units Used (usedUnits = current reading minus past reading)
+- "അഡ്ജസ്റ്റ്" / "ചാർജ്ജ്" is the Normalized / Billed Units (consumedUnits)
 
 Return ONLY a clean JSON object with this exact shape:
 {
@@ -95,16 +106,20 @@ Return ONLY a clean JSON object with this exact shape:
     "previousReadingDate": "YYYY-MM-DD format (from മുൻ റീഡി തീയതി)",
     "currentReadingDate": "YYYY-MM-DD format (from നീല റീഡി തീയതി)",
     "billingCycleDays": 60,
-    "prevReadingNormal": "e.g. 3227.00",
-    "currReadingNormal": "e.g. 3575.00",
-    "consumedUnitsNormal": "e.g. 402.00",
-    "prevReadingOffPeak": "e.g. 3851.00",
-    "currReadingOffPeak": "e.g. 4177.00",
-    "consumedUnitsOffPeak": "e.g. 322.00",
-    "prevReadingPeak": "e.g. 410.00",
-    "currReadingPeak": "e.g. 422.00",
-    "consumedUnitsPeak": "e.g. 28.00",
-    "totalUnits": "sum of consumed units, e.g. 752.00",
+    "prevReadingNormal": "Past reading for Normal zone (from മുൻ column), e.g. 3227.00",
+    "currReadingNormal": "Current reading for Normal zone (from നിലവിൽ column), e.g. 3575.00",
+    "usedUnitsNormal": "Actual raw used units for Normal zone (from ഉപഭോഗം column), e.g. 348.00",
+    "consumedUnitsNormal": "Normalized / billed units for Normal zone (from അഡ്ജസ്റ്റ് column), e.g. 402.00",
+    "prevReadingOffPeak": "Past reading for Off-Peak zone (from മുൻ column), e.g. 3851.00",
+    "currReadingOffPeak": "Current reading for Off-Peak zone (from നിലവിൽ column), e.g. 4177.00",
+    "usedUnitsOffPeak": "Actual raw used units for Off-Peak zone (from ഉപഭോഗം column), e.g. 326.00",
+    "consumedUnitsOffPeak": "Normalized / billed units for Off-Peak zone (from അഡ്ജസ്റ്റ് column), e.g. 322.00",
+    "prevReadingPeak": "Past reading for Peak zone (from മുൻ column), e.g. 410.00",
+    "currReadingPeak": "Current reading for Peak zone (from നിലവിൽ column), e.g. 422.00",
+    "usedUnitsPeak": "Actual raw used units for Peak zone (from ഉപഭോഗം column), e.g. 12.00",
+    "consumedUnitsPeak": "Normalized / billed units for Peak zone (from അഡ്ജസ്റ്റ് column), e.g. 28.00",
+    "totalUsedUnits": "Total raw units used (sum of used units: 348 + 326 + 12), e.g. 686.00",
+    "totalUnits": "Total billed / normalized units (sum of billed units: 402 + 322 + 28), e.g. 752.00",
     "energyCharge": "e.g. 4971.92",
     "duty": "e.g. 497.19",
     "fuelSurcharge": "e.g. 20.58",
@@ -251,6 +266,28 @@ async function parseWithGemini(
       const c = parsed.consumer || {};
       const b = parsed.bill || {};
 
+      const prevNorm = String(b.prevReadingNormal || "0.00");
+      const currNorm = String(b.currReadingNormal || "0.00");
+      const usedNorm = b.usedUnitsNormal ? String(b.usedUnitsNormal) : calcDiff(currNorm, prevNorm);
+      const normNorm = String(b.consumedUnitsNormal || usedNorm);
+
+      const prevOff = String(b.prevReadingOffPeak || "0.00");
+      const currOff = String(b.currReadingOffPeak || "0.00");
+      const usedOff = b.usedUnitsOffPeak ? String(b.usedUnitsOffPeak) : calcDiff(currOff, prevOff);
+      const normOff = String(b.consumedUnitsOffPeak || usedOff);
+
+      const prevPk = String(b.prevReadingPeak || "0.00");
+      const currPk = String(b.currReadingPeak || "0.00");
+      const usedPk = b.usedUnitsPeak ? String(b.usedUnitsPeak) : calcDiff(currPk, prevPk);
+      const normPk = String(b.consumedUnitsPeak || usedPk);
+
+      const totUsed = b.totalUsedUnits
+        ? String(b.totalUsedUnits)
+        : (parseFloat(usedNorm) + parseFloat(usedOff) + parseFloat(usedPk)).toFixed(2);
+      const totUnits = b.totalUnits
+        ? String(b.totalUnits)
+        : (parseFloat(normNorm) + parseFloat(normOff) + parseFloat(normPk)).toFixed(2);
+
       return {
         success: true,
         source: "gemini_ai",
@@ -282,16 +319,20 @@ async function parseWithGemini(
           previousReadingDate: normalizeDate(b.previousReadingDate),
           currentReadingDate: normalizeDate(b.currentReadingDate),
           billingCycleDays: Number(b.billingCycleDays || 60),
-          prevReadingNormal: String(b.prevReadingNormal || "0.00"),
-          currReadingNormal: String(b.currReadingNormal || "0.00"),
-          consumedUnitsNormal: String(b.consumedUnitsNormal || "0.00"),
-          prevReadingOffPeak: String(b.prevReadingOffPeak || "0.00"),
-          currReadingOffPeak: String(b.currReadingOffPeak || "0.00"),
-          consumedUnitsOffPeak: String(b.consumedUnitsOffPeak || "0.00"),
-          prevReadingPeak: String(b.prevReadingPeak || "0.00"),
-          currReadingPeak: String(b.currReadingPeak || "0.00"),
-          consumedUnitsPeak: String(b.consumedUnitsPeak || "0.00"),
-          totalUnits: String(b.totalUnits || "0.00"),
+          prevReadingNormal: prevNorm,
+          currReadingNormal: currNorm,
+          usedUnitsNormal: usedNorm,
+          consumedUnitsNormal: normNorm,
+          prevReadingOffPeak: prevOff,
+          currReadingOffPeak: currOff,
+          usedUnitsOffPeak: usedOff,
+          consumedUnitsOffPeak: normOff,
+          prevReadingPeak: prevPk,
+          currReadingPeak: currPk,
+          usedUnitsPeak: usedPk,
+          consumedUnitsPeak: normPk,
+          totalUsedUnits: totUsed,
+          totalUnits: totUnits,
           energyCharge: String(b.energyCharge || "0.00"),
           duty: String(b.duty || "0.00"),
           fuelSurcharge: String(b.fuelSurcharge || "0.00"),
@@ -398,13 +439,17 @@ function extractFromText(text: string, customRemark?: string): ParsedBillResult 
       billingCycleDays: 60,
       prevReadingNormal: "0.00",
       currReadingNormal: "0.00",
+      usedUnitsNormal: "0.00",
       consumedUnitsNormal: totalUnits,
       prevReadingOffPeak: "0.00",
       currReadingOffPeak: "0.00",
+      usedUnitsOffPeak: "0.00",
       consumedUnitsOffPeak: "0.00",
       prevReadingPeak: "0.00",
       currReadingPeak: "0.00",
+      usedUnitsPeak: "0.00",
       consumedUnitsPeak: "0.00",
+      totalUsedUnits: totalUnits,
       totalUnits,
       energyCharge: payableAmount,
       duty: (parseFloat(payableAmount) * 0.1).toFixed(2),
@@ -419,6 +464,15 @@ function extractFromText(text: string, customRemark?: string): ParsedBillResult 
     },
     rawText: text,
   };
+}
+
+function calcDiff(curr: string, prev: string): string {
+  const c = parseFloat(curr);
+  const p = parseFloat(prev);
+  if (!isNaN(c) && !isNaN(p) && c >= p && c > 0) {
+    return (c - p).toFixed(2);
+  }
+  return "0.00";
 }
 
 function normalizeDate(d?: string | null): string {

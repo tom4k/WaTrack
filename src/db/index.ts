@@ -99,13 +99,17 @@ async function ensurePgSchema(): Promise<void> {
           is_bi_monthly BOOLEAN DEFAULT TRUE NOT NULL,
           prev_reading_normal TEXT,
           curr_reading_normal TEXT,
+          used_units_normal TEXT,
           consumed_units_normal TEXT,
           prev_reading_off_peak TEXT,
           curr_reading_off_peak TEXT,
+          used_units_off_peak TEXT,
           consumed_units_off_peak TEXT,
           prev_reading_peak TEXT,
           curr_reading_peak TEXT,
+          used_units_peak TEXT,
           consumed_units_peak TEXT,
+          total_used_units TEXT,
           total_units TEXT NOT NULL,
           energy_charge TEXT DEFAULT '0.00' NOT NULL,
           duty TEXT DEFAULT '0.00' NOT NULL,
@@ -149,6 +153,10 @@ async function ensurePgSchema(): Promise<void> {
           updated_at TEXT NOT NULL
         );
         ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gemini_api_key TEXT;
+        ALTER TABLE bills ADD COLUMN IF NOT EXISTS used_units_normal TEXT;
+        ALTER TABLE bills ADD COLUMN IF NOT EXISTS used_units_off_peak TEXT;
+        ALTER TABLE bills ADD COLUMN IF NOT EXISTS used_units_peak TEXT;
+        ALTER TABLE bills ADD COLUMN IF NOT EXISTS total_used_units TEXT;
       `);
       pgSchemaEnsured = true;
     } catch (err) {
@@ -231,13 +239,17 @@ function getSqliteDb(): DatabaseSync {
       is_bi_monthly INTEGER DEFAULT 1 NOT NULL,
       prev_reading_normal TEXT,
       curr_reading_normal TEXT,
+      used_units_normal TEXT,
       consumed_units_normal TEXT,
       prev_reading_off_peak TEXT,
       curr_reading_off_peak TEXT,
+      used_units_off_peak TEXT,
       consumed_units_off_peak TEXT,
       prev_reading_peak TEXT,
       curr_reading_peak TEXT,
+      used_units_peak TEXT,
       consumed_units_peak TEXT,
+      total_used_units TEXT,
       total_units TEXT NOT NULL,
       energy_charge TEXT DEFAULT '0.00' NOT NULL,
       duty TEXT DEFAULT '0.00' NOT NULL,
@@ -287,6 +299,10 @@ function getSqliteDb(): DatabaseSync {
   try {
     sqliteDb.exec("ALTER TABLE app_settings ADD COLUMN gemini_api_key TEXT;");
   } catch {}
+  try { sqliteDb.exec("ALTER TABLE bills ADD COLUMN used_units_normal TEXT;"); } catch {}
+  try { sqliteDb.exec("ALTER TABLE bills ADD COLUMN used_units_off_peak TEXT;"); } catch {}
+  try { sqliteDb.exec("ALTER TABLE bills ADD COLUMN used_units_peak TEXT;"); } catch {}
+  try { sqliteDb.exec("ALTER TABLE bills ADD COLUMN total_used_units TEXT;"); } catch {}
 
   // Auto-seed only in non-production if explicitly requested via AUTO_SEED=true
   const shouldAutoSeed =
@@ -776,25 +792,26 @@ export const dbService = {
       INSERT INTO bills (
         id, consumer_id, bill_number, bill_area, bill_date, due_date, disconnection_date,
         reading_time, previous_reading_date, current_reading_date, billing_cycle_days,
-        is_bi_monthly, prev_reading_normal, curr_reading_normal, consumed_units_normal,
-        prev_reading_off_peak, curr_reading_off_peak, consumed_units_off_peak,
-        prev_reading_peak, curr_reading_peak, consumed_units_peak, total_units,
+        is_bi_monthly, prev_reading_normal, curr_reading_normal, used_units_normal, consumed_units_normal,
+        prev_reading_off_peak, curr_reading_off_peak, used_units_off_peak, consumed_units_off_peak,
+        prev_reading_peak, curr_reading_peak, used_units_peak, consumed_units_peak,
+        total_used_units, total_units,
         energy_charge, duty, fuel_surcharge, fixed_charge, meter_rent, round_off,
         arrears, total_amount, payable_amount, paid_amount, status,
         document_path, document_original_name, document_mime_type, document_size_bytes,
         remarks, created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `, [
       id, data.consumerId, data.billNumber, data.billArea ?? null, data.billDate, data.dueDate,
       data.disconnectionDate ?? null, data.readingTime ?? null, data.previousReadingDate, data.currentReadingDate,
       Number(data.billingCycleDays || 60),
       isPostgres ? (data.isBiMonthly !== false) : (data.isBiMonthly !== false ? 1 : 0),
-      r_num(data.prevReadingNormal), r_num(data.currReadingNormal), r_num(data.consumedUnitsNormal),
-      r_num(data.prevReadingOffPeak), r_num(data.currReadingOffPeak), r_num(data.consumedUnitsOffPeak),
-      r_num(data.prevReadingPeak), r_num(data.currReadingPeak), r_num(data.consumedUnitsPeak),
-      r_num(data.totalUnits),
+      r_num(data.prevReadingNormal), r_num(data.currReadingNormal), r_num(data.usedUnitsNormal), r_num(data.consumedUnitsNormal),
+      r_num(data.prevReadingOffPeak), r_num(data.currReadingOffPeak), r_num(data.usedUnitsOffPeak), r_num(data.consumedUnitsOffPeak),
+      r_num(data.prevReadingPeak), r_num(data.currReadingPeak), r_num(data.usedUnitsPeak), r_num(data.consumedUnitsPeak),
+      r_num(data.totalUsedUnits), r_num(data.totalUnits),
       r_num(data.energyCharge, "0.00"), r_num(data.duty, "0.00"), r_num(data.fuelSurcharge, "0.00"),
       r_num(data.fixedCharge, "0.00"), r_num(data.meterRent, "0.00"), r_num(data.roundOff, "0.00"),
       r_num(data.arrears, "0.00"), r_num(data.totalAmount), r_num(data.payableAmount),
@@ -825,10 +842,10 @@ export const dbService = {
         consumer_id = ?, bill_number = ?, bill_area = ?, bill_date = ?, due_date = ?,
         disconnection_date = ?, reading_time = ?, previous_reading_date = ?, current_reading_date = ?,
         billing_cycle_days = ?, is_bi_monthly = ?,
-        prev_reading_normal = ?, curr_reading_normal = ?, consumed_units_normal = ?,
-        prev_reading_off_peak = ?, curr_reading_off_peak = ?, consumed_units_off_peak = ?,
-        prev_reading_peak = ?, curr_reading_peak = ?, consumed_units_peak = ?,
-        total_units = ?, energy_charge = ?, duty = ?, fuel_surcharge = ?, fixed_charge = ?,
+        prev_reading_normal = ?, curr_reading_normal = ?, used_units_normal = ?, consumed_units_normal = ?,
+        prev_reading_off_peak = ?, curr_reading_off_peak = ?, used_units_off_peak = ?, consumed_units_off_peak = ?,
+        prev_reading_peak = ?, curr_reading_peak = ?, used_units_peak = ?, consumed_units_peak = ?,
+        total_used_units = ?, total_units = ?, energy_charge = ?, duty = ?, fuel_surcharge = ?, fixed_charge = ?,
         meter_rent = ?, round_off = ?, arrears = ?, total_amount = ?, payable_amount = ?,
         paid_amount = ?, status = ?,
         document_path = COALESCE(?, document_path),
@@ -853,13 +870,17 @@ export const dbService = {
         : ((data.isBiMonthly !== undefined ? data.isBiMonthly : current.isBiMonthly) ? 1 : 0),
       r_num(data.prevReadingNormal ?? current.prevReadingNormal),
       r_num(data.currReadingNormal ?? current.currReadingNormal),
+      r_num(data.usedUnitsNormal ?? current.usedUnitsNormal),
       r_num(data.consumedUnitsNormal ?? current.consumedUnitsNormal),
       r_num(data.prevReadingOffPeak ?? current.prevReadingOffPeak),
       r_num(data.currReadingOffPeak ?? current.currReadingOffPeak),
+      r_num(data.usedUnitsOffPeak ?? current.usedUnitsOffPeak),
       r_num(data.consumedUnitsOffPeak ?? current.consumedUnitsOffPeak),
       r_num(data.prevReadingPeak ?? current.prevReadingPeak),
       r_num(data.currReadingPeak ?? current.currReadingPeak),
+      r_num(data.usedUnitsPeak ?? current.usedUnitsPeak),
       r_num(data.consumedUnitsPeak ?? current.consumedUnitsPeak),
+      r_num(data.totalUsedUnits ?? current.totalUsedUnits),
       r_num(data.totalUnits ?? current.totalUnits),
       r_num(data.energyCharge ?? current.energyCharge, "0.00"),
       r_num(data.duty ?? current.duty, "0.00"),
@@ -1116,13 +1137,25 @@ function mapBillRow(r: any, dynamicStatus: string) {
     isBiMonthly: toBool(r.is_bi_monthly),
     prevReadingNormal: r.prev_reading_normal,
     currReadingNormal: r.curr_reading_normal,
+    usedUnitsNormal: r.used_units_normal || (r.curr_reading_normal && r.prev_reading_normal ? String(Math.max(0, parseFloat(r.curr_reading_normal) - parseFloat(r.prev_reading_normal)).toFixed(2)) : null),
     consumedUnitsNormal: r.consumed_units_normal,
     prevReadingOffPeak: r.prev_reading_off_peak,
     currReadingOffPeak: r.curr_reading_off_peak,
+    usedUnitsOffPeak: r.used_units_off_peak || (r.curr_reading_off_peak && r.prev_reading_off_peak ? String(Math.max(0, parseFloat(r.curr_reading_off_peak) - parseFloat(r.prev_reading_off_peak)).toFixed(2)) : null),
     consumedUnitsOffPeak: r.consumed_units_off_peak,
     prevReadingPeak: r.prev_reading_peak,
     currReadingPeak: r.curr_reading_peak,
+    usedUnitsPeak: r.used_units_peak || (r.curr_reading_peak && r.prev_reading_peak ? String(Math.max(0, parseFloat(r.curr_reading_peak) - parseFloat(r.prev_reading_peak)).toFixed(2)) : null),
     consumedUnitsPeak: r.consumed_units_peak,
+    totalUsedUnits: r.total_used_units || (
+      (r.curr_reading_normal && r.prev_reading_normal)
+        ? String((
+            Math.max(0, parseFloat(r.curr_reading_normal || "0") - parseFloat(r.prev_reading_normal || "0")) +
+            Math.max(0, parseFloat(r.curr_reading_off_peak || "0") - parseFloat(r.prev_reading_off_peak || "0")) +
+            Math.max(0, parseFloat(r.curr_reading_peak || "0") - parseFloat(r.prev_reading_peak || "0"))
+          ).toFixed(2))
+        : null
+    ),
     totalUnits: r.total_units,
     energyCharge: r.energy_charge,
     duty: r.duty,

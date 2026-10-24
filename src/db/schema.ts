@@ -55,16 +55,20 @@ export const bills = pgTable("bills", {
   // Time-Of-Day (TOD) Readings & Consumption
   prevReadingNormal: numeric("prev_reading_normal", { precision: 10, scale: 2 }),
   currReadingNormal: numeric("curr_reading_normal", { precision: 10, scale: 2 }),
+  usedUnitsNormal: numeric("used_units_normal", { precision: 10, scale: 2 }),
   consumedUnitsNormal: numeric("consumed_units_normal", { precision: 10, scale: 2 }),
 
   prevReadingOffPeak: numeric("prev_reading_off_peak", { precision: 10, scale: 2 }),
   currReadingOffPeak: numeric("curr_reading_off_peak", { precision: 10, scale: 2 }),
+  usedUnitsOffPeak: numeric("used_units_off_peak", { precision: 10, scale: 2 }),
   consumedUnitsOffPeak: numeric("consumed_units_off_peak", { precision: 10, scale: 2 }),
 
   prevReadingPeak: numeric("prev_reading_peak", { precision: 10, scale: 2 }),
   currReadingPeak: numeric("curr_reading_peak", { precision: 10, scale: 2 }),
+  usedUnitsPeak: numeric("used_units_peak", { precision: 10, scale: 2 }),
   consumedUnitsPeak: numeric("consumed_units_peak", { precision: 10, scale: 2 }),
 
+  totalUsedUnits: numeric("total_used_units", { precision: 10, scale: 2 }),
   totalUnits: numeric("total_units", { precision: 10, scale: 2 }).notNull(),
 
   // Charge Particulars (Stored precisely in INR)

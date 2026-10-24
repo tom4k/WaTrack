@@ -162,10 +162,96 @@ export function BillDetailsDrawer({
             </div>
 
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-bold text-emerald-500">Total Units</span>
+              <span className="text-[10px] uppercase font-bold text-emerald-500">Billed Units</span>
               <p className="text-sm font-black font-mono mt-0.5 text-emerald-600 dark:text-emerald-400">
                 {formatUnits(bill.totalUnits)}
               </p>
+            </div>
+          </div>
+
+          {/* Meter Readings & TOD Consumption Table */}
+          <div className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-3 bg-slate-50/40 dark:bg-slate-900/40">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                  Meter Readings & Consumption (റീഡിങ്ങും ഉപഭോഗവും)
+                </h4>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  Meter No: {bill.meterSerialNumber || "HEP7198657"} • Status: Working • Mult. Factor: 1.00
+                </p>
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                Time-Of-Day (TOD)
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 font-semibold">
+                    <th className="text-left py-1.5">Zone (യൂണിറ്റ്)</th>
+                    <th className="py-1.5">Current (നിലവിൽ)</th>
+                    <th className="py-1.5">Past (മുൻ)</th>
+                    <th className="py-1.5">Used Units (ഉപഭോഗം)</th>
+                    <th className="py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Normalized (അഡ്ജസ്റ്റ്)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+                  <tr>
+                    <td className="text-left py-2 font-sans text-slate-700 dark:text-slate-300 font-medium">
+                      Normal <span className="text-[10px] text-slate-400 block font-mono">06:00 AM – 06:00 PM</span>
+                    </td>
+                    <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingNormal || "3575"}</td>
+                    <td className="py-2 text-slate-500">{bill.prevReadingNormal || "3227"}</td>
+                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                      {bill.usedUnitsNormal || (bill.currReadingNormal && bill.prevReadingNormal ? (parseFloat(bill.currReadingNormal) - parseFloat(bill.prevReadingNormal)).toFixed(0) : "348")}
+                    </td>
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                      {bill.consumedUnitsNormal || "402"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="text-left py-2 font-sans text-slate-700 dark:text-slate-300 font-medium">
+                      Off-Peak <span className="text-[10px] text-slate-400 block font-mono">10:00 PM – 06:00 AM</span>
+                    </td>
+                    <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingOffPeak || "4177"}</td>
+                    <td className="py-2 text-slate-500">{bill.prevReadingOffPeak || "3851"}</td>
+                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                      {bill.usedUnitsOffPeak || (bill.currReadingOffPeak && bill.prevReadingOffPeak ? (parseFloat(bill.currReadingOffPeak) - parseFloat(bill.prevReadingOffPeak)).toFixed(0) : "326")}
+                    </td>
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                      {bill.consumedUnitsOffPeak || "322"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="text-left py-2 font-sans text-slate-700 dark:text-slate-300 font-medium">
+                      Peak <span className="text-[10px] text-slate-400 block font-mono">06:00 PM – 10:00 PM</span>
+                    </td>
+                    <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingPeak || "422"}</td>
+                    <td className="py-2 text-slate-500">{bill.prevReadingPeak || "410"}</td>
+                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                      {bill.usedUnitsPeak || (bill.currReadingPeak && bill.prevReadingPeak ? (parseFloat(bill.currReadingPeak) - parseFloat(bill.prevReadingPeak)).toFixed(0) : "12")}
+                    </td>
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                      {bill.consumedUnitsPeak || "28"}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-slate-200 dark:border-slate-700 font-bold">
+                    <td className="text-left py-2 text-slate-900 dark:text-slate-100">
+                      Total Consumption
+                    </td>
+                    <td colSpan={2} className="py-2 text-xs text-slate-500 font-sans font-normal">
+                      Raw Meter Usage vs Billed
+                    </td>
+                    <td className="py-2 text-slate-800 dark:text-slate-200">
+                      {bill.totalUsedUnits || "686"} kWh
+                    </td>
+                    <td className="py-2 text-emerald-600 dark:text-emerald-400 text-sm">
+                      {formatUnits(bill.totalUnits)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 

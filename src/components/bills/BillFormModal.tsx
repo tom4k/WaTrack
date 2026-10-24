@@ -108,16 +108,20 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
   // TOD Readings
   const [prevReadingNormal, setPrevReadingNormal] = useState("");
   const [currReadingNormal, setCurrReadingNormal] = useState("");
+  const [usedUnitsNormal, setUsedUnitsNormal] = useState("");
   const [consumedUnitsNormal, setConsumedUnitsNormal] = useState("");
 
   const [prevReadingOffPeak, setPrevReadingOffPeak] = useState("");
   const [currReadingOffPeak, setCurrReadingOffPeak] = useState("");
+  const [usedUnitsOffPeak, setUsedUnitsOffPeak] = useState("");
   const [consumedUnitsOffPeak, setConsumedUnitsOffPeak] = useState("");
 
   const [prevReadingPeak, setPrevReadingPeak] = useState("");
   const [currReadingPeak, setCurrReadingPeak] = useState("");
+  const [usedUnitsPeak, setUsedUnitsPeak] = useState("");
   const [consumedUnitsPeak, setConsumedUnitsPeak] = useState("");
 
+  const [totalUsedUnits, setTotalUsedUnits] = useState("");
   const [totalUnits, setTotalUnits] = useState("");
 
   // Charges
@@ -167,16 +171,20 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
 
       setPrevReadingNormal(billToEdit.prevReadingNormal || "");
       setCurrReadingNormal(billToEdit.currReadingNormal || "");
+      setUsedUnitsNormal(billToEdit.usedUnitsNormal || "");
       setConsumedUnitsNormal(billToEdit.consumedUnitsNormal || "");
 
       setPrevReadingOffPeak(billToEdit.prevReadingOffPeak || "");
       setCurrReadingOffPeak(billToEdit.currReadingOffPeak || "");
+      setUsedUnitsOffPeak(billToEdit.usedUnitsOffPeak || "");
       setConsumedUnitsOffPeak(billToEdit.consumedUnitsOffPeak || "");
 
       setPrevReadingPeak(billToEdit.prevReadingPeak || "");
       setCurrReadingPeak(billToEdit.currReadingPeak || "");
+      setUsedUnitsPeak(billToEdit.usedUnitsPeak || "");
       setConsumedUnitsPeak(billToEdit.consumedUnitsPeak || "");
 
+      setTotalUsedUnits(billToEdit.totalUsedUnits || "");
       setTotalUnits(billToEdit.totalUnits || "");
       setEnergyCharge(billToEdit.energyCharge || "");
       setDuty(billToEdit.duty || "");
@@ -276,16 +284,20 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
 
         setPrevReadingNormal(b.prevReadingNormal || "");
         setCurrReadingNormal(b.currReadingNormal || "");
+        setUsedUnitsNormal(b.usedUnitsNormal || "");
         setConsumedUnitsNormal(b.consumedUnitsNormal || "");
 
         setPrevReadingOffPeak(b.prevReadingOffPeak || "");
         setCurrReadingOffPeak(b.currReadingOffPeak || "");
+        setUsedUnitsOffPeak(b.usedUnitsOffPeak || "");
         setConsumedUnitsOffPeak(b.consumedUnitsOffPeak || "");
 
         setPrevReadingPeak(b.prevReadingPeak || "");
         setCurrReadingPeak(b.currReadingPeak || "");
+        setUsedUnitsPeak(b.usedUnitsPeak || "");
         setConsumedUnitsPeak(b.consumedUnitsPeak || "");
 
+        setTotalUsedUnits(b.totalUsedUnits || "");
         setTotalUnits(b.totalUnits || "");
         setEnergyCharge(b.energyCharge || "");
         setDuty(b.duty || "");
@@ -344,13 +356,17 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         isBiMonthly: true,
         prevReadingNormal: prevReadingNormal ? parseFloat(prevReadingNormal) : null,
         currReadingNormal: currReadingNormal ? parseFloat(currReadingNormal) : null,
+        usedUnitsNormal: usedUnitsNormal ? parseFloat(usedUnitsNormal) : null,
         consumedUnitsNormal: consumedUnitsNormal ? parseFloat(consumedUnitsNormal) : null,
         prevReadingOffPeak: prevReadingOffPeak ? parseFloat(prevReadingOffPeak) : null,
         currReadingOffPeak: currReadingOffPeak ? parseFloat(currReadingOffPeak) : null,
+        usedUnitsOffPeak: usedUnitsOffPeak ? parseFloat(usedUnitsOffPeak) : null,
         consumedUnitsOffPeak: consumedUnitsOffPeak ? parseFloat(consumedUnitsOffPeak) : null,
         prevReadingPeak: prevReadingPeak ? parseFloat(prevReadingPeak) : null,
         currReadingPeak: currReadingPeak ? parseFloat(currReadingPeak) : null,
+        usedUnitsPeak: usedUnitsPeak ? parseFloat(usedUnitsPeak) : null,
         consumedUnitsPeak: consumedUnitsPeak ? parseFloat(consumedUnitsPeak) : null,
+        totalUsedUnits: totalUsedUnits ? parseFloat(totalUsedUnits) : null,
         totalUnits: parseFloat(totalUnits || "0"),
         energyCharge: parseFloat(energyCharge || "0"),
         duty: parseFloat(duty || "0"),
@@ -608,11 +624,80 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                   </div>
                 </div>
 
-                {(consumedUnitsNormal || consumedUnitsOffPeak || consumedUnitsPeak) && (
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>TOD Normal: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsNormal || "0"}u</strong></span>
-                    <span>Off-Peak: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsOffPeak || "0"}u</strong></span>
-                    <span>Peak: <strong className="text-slate-700 dark:text-slate-300">{consumedUnitsPeak || "0"}u</strong></span>
+                {/* Meter Readings & TOD Breakdown Table */}
+                {(currReadingNormal || prevReadingNormal || consumedUnitsNormal || totalUnits) && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                        Meter Readings & TOD Consumption (റീഡിങ്ങും ഉപഭോഗവും)
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        Main Meter MM
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border border-slate-200/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                      <table className="w-full text-right text-[11px]">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 font-semibold uppercase">
+                            <th className="text-left p-1.5">Zone (യൂണിറ്റ്)</th>
+                            <th className="p-1.5">Current (നിലവിൽ)</th>
+                            <th className="p-1.5">Past (മുൻ)</th>
+                            <th className="p-1.5 text-slate-700 dark:text-slate-300 font-bold">Used (ഉപഭോഗം)</th>
+                            <th className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Normalized (അഡ്ജസ്റ്റ്)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
+                          <tr>
+                            <td className="text-left p-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                              Normal <span className="text-[9px] text-slate-400 block font-mono">06:00 – 18:00</span>
+                            </td>
+                            <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingNormal || "3575"}</td>
+                            <td className="p-1.5 text-slate-500">{prevReadingNormal || "3227"}</td>
+                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                              {usedUnitsNormal || (currReadingNormal && prevReadingNormal ? (parseFloat(currReadingNormal) - parseFloat(prevReadingNormal)).toFixed(0) : "348")}
+                            </td>
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsNormal || "402"}</td>
+                          </tr>
+                          <tr>
+                            <td className="text-left p-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                              Off-Peak <span className="text-[9px] text-slate-400 block font-mono">22:00 – 06:00</span>
+                            </td>
+                            <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingOffPeak || "4177"}</td>
+                            <td className="p-1.5 text-slate-500">{prevReadingOffPeak || "3851"}</td>
+                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                              {usedUnitsOffPeak || (currReadingOffPeak && prevReadingOffPeak ? (parseFloat(currReadingOffPeak) - parseFloat(prevReadingOffPeak)).toFixed(0) : "326")}
+                            </td>
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsOffPeak || "322"}</td>
+                          </tr>
+                          <tr>
+                            <td className="text-left p-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                              Peak <span className="text-[9px] text-slate-400 block font-mono">18:00 – 22:00</span>
+                            </td>
+                            <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingPeak || "422"}</td>
+                            <td className="p-1.5 text-slate-500">{prevReadingPeak || "410"}</td>
+                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                              {usedUnitsPeak || (currReadingPeak && prevReadingPeak ? (parseFloat(currReadingPeak) - parseFloat(prevReadingPeak)).toFixed(0) : "12")}
+                            </td>
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsPeak || "28"}</td>
+                          </tr>
+                          <tr className="border-t border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/40 font-bold">
+                            <td className="text-left p-1.5 font-sans text-slate-900 dark:text-slate-100">
+                              Total
+                            </td>
+                            <td colSpan={2} className="p-1.5 text-[10px] text-slate-500 font-sans font-normal">
+                              Raw Used vs Billed
+                            </td>
+                            <td className="p-1.5 text-slate-900 dark:text-slate-100">
+                              {totalUsedUnits || "686"} kWh
+                            </td>
+                            <td className="p-1.5 text-emerald-600 dark:text-emerald-400 text-xs">
+                              {totalUnits} kWh
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -731,39 +816,172 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                 </div>
               </div>
 
-              {/* Time-Of-Day (TOD) Readings */}
+              {/* Time-Of-Day (TOD) Readings Editable Grid */}
               <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                  Time-Of-Day (TOD) Meter Readings
-                </span>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <Label className="text-[11px]">Normal (6 AM - 6 PM)</Label>
-                    <Input
-                      value={consumedUnitsNormal}
-                      onChange={(e) => setConsumedUnitsNormal(e.target.value)}
-                      placeholder="Units"
-                      className="mt-1 font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Off-Peak (10 PM - 6 AM)</Label>
-                    <Input
-                      value={consumedUnitsOffPeak}
-                      onChange={(e) => setConsumedUnitsOffPeak(e.target.value)}
-                      placeholder="Units"
-                      className="mt-1 font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Peak (6 PM - 10 PM)</Label>
-                    <Input
-                      value={consumedUnitsPeak}
-                      onChange={(e) => setConsumedUnitsPeak(e.target.value)}
-                      placeholder="Units"
-                      className="mt-1 font-mono text-xs"
-                    />
-                  </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    Time-Of-Day (TOD) Meter Readings (റീഡിങ്ങും ഉപഭോഗവും)
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Enter current reading and past reading to auto-calculate used units, or adjust normalized units directly.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 font-semibold">
+                        <th className="text-left py-1 font-sans">Zone</th>
+                        <th className="py-1">Current (നിലവിൽ)</th>
+                        <th className="py-1">Past (മുൻ)</th>
+                        <th className="py-1">Used (ഉപഭോഗം)</th>
+                        <th className="py-1 text-emerald-600 dark:text-emerald-400">Normalized (അഡ്ജസ്റ്റ്)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+                      <tr>
+                        <td className="text-left py-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                          Normal <span className="text-[9px] text-slate-400 block font-mono">06:00 – 18:00</span>
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={currReadingNormal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCurrReadingNormal(val);
+                              const diff = parseFloat(val) - parseFloat(prevReadingNormal);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsNormal(diff.toFixed(0));
+                            }}
+                            placeholder="3575"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={prevReadingNormal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPrevReadingNormal(val);
+                              const diff = parseFloat(currReadingNormal) - parseFloat(val);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsNormal(diff.toFixed(0));
+                            }}
+                            placeholder="3227"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={usedUnitsNormal}
+                            onChange={(e) => setUsedUnitsNormal(e.target.value)}
+                            placeholder="348"
+                            className="h-8 font-mono text-xs text-right font-semibold"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={consumedUnitsNormal}
+                            onChange={(e) => setConsumedUnitsNormal(e.target.value)}
+                            placeholder="402"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="text-left py-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                          Off-Peak <span className="text-[9px] text-slate-400 block font-mono">22:00 – 06:00</span>
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={currReadingOffPeak}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCurrReadingOffPeak(val);
+                              const diff = parseFloat(val) - parseFloat(prevReadingOffPeak);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsOffPeak(diff.toFixed(0));
+                            }}
+                            placeholder="4177"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={prevReadingOffPeak}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPrevReadingOffPeak(val);
+                              const diff = parseFloat(currReadingOffPeak) - parseFloat(val);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsOffPeak(diff.toFixed(0));
+                            }}
+                            placeholder="3851"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={usedUnitsOffPeak}
+                            onChange={(e) => setUsedUnitsOffPeak(e.target.value)}
+                            placeholder="326"
+                            className="h-8 font-mono text-xs text-right font-semibold"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={consumedUnitsOffPeak}
+                            onChange={(e) => setConsumedUnitsOffPeak(e.target.value)}
+                            placeholder="322"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="text-left py-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
+                          Peak <span className="text-[9px] text-slate-400 block font-mono">18:00 – 22:00</span>
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={currReadingPeak}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCurrReadingPeak(val);
+                              const diff = parseFloat(val) - parseFloat(prevReadingPeak);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsPeak(diff.toFixed(0));
+                            }}
+                            placeholder="422"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={prevReadingPeak}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPrevReadingPeak(val);
+                              const diff = parseFloat(currReadingPeak) - parseFloat(val);
+                              if (!isNaN(diff) && diff >= 0) setUsedUnitsPeak(diff.toFixed(0));
+                            }}
+                            placeholder="410"
+                            className="h-8 font-mono text-xs text-right"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={usedUnitsPeak}
+                            onChange={(e) => setUsedUnitsPeak(e.target.value)}
+                            placeholder="12"
+                            className="h-8 font-mono text-xs text-right font-semibold"
+                          />
+                        </td>
+                        <td className="py-1.5 pl-2">
+                          <Input
+                            value={consumedUnitsPeak}
+                            onChange={(e) => setConsumedUnitsPeak(e.target.value)}
+                            placeholder="28"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                          />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2">

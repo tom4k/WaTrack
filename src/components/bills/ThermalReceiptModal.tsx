@@ -263,15 +263,16 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
             </div>
 
             <p className="text-[10px] font-bold mb-1.5 text-slate-900">
-              റീഡിങ്ങും ഉപയോഗവും (TOD Reading):
+              റീഡിങ്ങും ഉപഭോഗവും (MM):
             </p>
             <table className="w-full text-right text-[10px] border-collapse">
               <thead>
                 <tr className="border-b border-slate-400 font-bold text-slate-900">
                   <th className="text-left py-0.5">യൂണിറ്റ്</th>
                   <th className="py-0.5">നിലവിൽ</th>
-                  <th className="py-0.5">മുമ്പ്</th>
-                  <th className="py-0.5">ഉപയോഗം</th>
+                  <th className="py-0.5">മുൻ</th>
+                  <th className="py-0.5">ഉപഭോഗം</th>
+                  <th className="py-0.5">അഡ്ജസ്റ്റ്</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -279,7 +280,10 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                   <td className="text-left font-mono py-0.5 font-bold">KWH(NL)</td>
                   <td className="font-mono">{formatIndianNumber(bill.currReadingNormal || 3575, 0)}</td>
                   <td className="font-mono">{formatIndianNumber(bill.prevReadingNormal || 3227, 0)}</td>
-                  <td className="font-mono font-bold">
+                  <td className="font-mono text-slate-700">
+                    {formatIndianNumber(bill.usedUnitsNormal || (bill.currReadingNormal && bill.prevReadingNormal ? Math.max(0, parseFloat(bill.currReadingNormal) - parseFloat(bill.prevReadingNormal)) : 348), 0)}
+                  </td>
+                  <td className="font-mono font-bold text-slate-950">
                     {formatIndianNumber(bill.consumedUnitsNormal || 402, 0)}
                   </td>
                 </tr>
@@ -287,7 +291,10 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                   <td className="text-left font-mono py-0.5 font-bold">KWH(OP)</td>
                   <td className="font-mono">{formatIndianNumber(bill.currReadingOffPeak || 4177, 0)}</td>
                   <td className="font-mono">{formatIndianNumber(bill.prevReadingOffPeak || 3851, 0)}</td>
-                  <td className="font-mono font-bold">
+                  <td className="font-mono text-slate-700">
+                    {formatIndianNumber(bill.usedUnitsOffPeak || (bill.currReadingOffPeak && bill.prevReadingOffPeak ? Math.max(0, parseFloat(bill.currReadingOffPeak) - parseFloat(bill.prevReadingOffPeak)) : 326), 0)}
+                  </td>
+                  <td className="font-mono font-bold text-slate-950">
                     {formatIndianNumber(bill.consumedUnitsOffPeak || 322, 0)}
                   </td>
                 </tr>
@@ -295,16 +302,27 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                   <td className="text-left font-mono py-0.5 font-bold">KWH(PK)</td>
                   <td className="font-mono">{formatIndianNumber(bill.currReadingPeak || 422, 0)}</td>
                   <td className="font-mono">{formatIndianNumber(bill.prevReadingPeak || 410, 0)}</td>
-                  <td className="font-mono font-bold">
+                  <td className="font-mono text-slate-700">
+                    {formatIndianNumber(bill.usedUnitsPeak || (bill.currReadingPeak && bill.prevReadingPeak ? Math.max(0, parseFloat(bill.currReadingPeak) - parseFloat(bill.prevReadingPeak)) : 12), 0)}
+                  </td>
+                  <td className="font-mono font-bold text-slate-950">
                     {formatIndianNumber(bill.consumedUnitsPeak || 28, 0)}
+                  </td>
+                </tr>
+                <tr className="border-t border-slate-400 text-slate-700">
+                  <td colSpan={3} className="text-left py-0.5 text-[9px]">
+                    ആകെ ഉപഭോഗം (Raw Used Units):
+                  </td>
+                  <td colSpan={2} className="font-mono text-[10px] py-0.5 font-semibold">
+                    {formatIndianNumber(bill.totalUsedUnits || 686, 0)} kWh
                   </td>
                 </tr>
                 <tr className="border-t-2 border-slate-800 font-bold text-slate-950">
                   <td colSpan={3} className="text-left py-1 text-[11px]">
-                    ആകെ ഉപയോഗിച്ച യൂണിറ്റ് (Total kWh):
+                    ചാർജ്ജ് ചെയ്ത യൂണിറ്റ് (Billed kWh):
                   </td>
-                  <td className="font-mono text-xs py-1">
-                    {formatIndianNumber(bill.totalUnits, 0)}
+                  <td colSpan={2} className="font-mono text-xs py-1">
+                    {formatIndianNumber(bill.totalUnits, 0)} kWh
                   </td>
                 </tr>
               </tbody>

@@ -65,16 +65,20 @@ export const billSchema = z.object({
   // TOD Meter Readings
   prevReadingNormal: z.union([z.number(), z.string()]).optional().nullable(),
   currReadingNormal: z.union([z.number(), z.string()]).optional().nullable(),
+  usedUnitsNormal: z.union([z.number(), z.string()]).optional().nullable(),
   consumedUnitsNormal: z.union([z.number(), z.string()]).optional().nullable(),
 
   prevReadingOffPeak: z.union([z.number(), z.string()]).optional().nullable(),
   currReadingOffPeak: z.union([z.number(), z.string()]).optional().nullable(),
+  usedUnitsOffPeak: z.union([z.number(), z.string()]).optional().nullable(),
   consumedUnitsOffPeak: z.union([z.number(), z.string()]).optional().nullable(),
 
   prevReadingPeak: z.union([z.number(), z.string()]).optional().nullable(),
   currReadingPeak: z.union([z.number(), z.string()]).optional().nullable(),
+  usedUnitsPeak: z.union([z.number(), z.string()]).optional().nullable(),
   consumedUnitsPeak: z.union([z.number(), z.string()]).optional().nullable(),
 
+  totalUsedUnits: z.union([z.number(), z.string()]).optional().nullable(),
   totalUnits: z.union([z.number(), z.string()]),
 
   // Charges
