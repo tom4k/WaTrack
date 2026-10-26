@@ -23,5 +23,17 @@ describe("Analytics Engine", () => {
 
     // Monthly normalized distribution
     expect(analytics.monthlyNormalized.length).toBeGreaterThan(0);
+
+    // Cost Breakdown Anatomy
+    expect(analytics.costBreakdown).toBeDefined();
+    expect(analytics.costBreakdown.energyCharges).toBeGreaterThan(0);
+    expect(analytics.costBreakdown.dutyCharges).toBeGreaterThan(0);
+    expect(analytics.costBreakdown.energyPercent).toBeGreaterThan(50);
+
+    // Daily Burn Metrics
+    expect(analytics.avgDailyUnits).toBeGreaterThan(0);
+    expect(analytics.avgDailyCost).toBeGreaterThan(0);
+    expect(analytics.peakExposurePercent).toBeGreaterThanOrEqual(0);
+    expect(analytics.cycleHistory[0].dailyBurnUnits).toBeGreaterThan(0);
   });
 });

@@ -6,6 +6,9 @@ export interface CycleAnalytics {
   billDate: string;
   cycleLabel: string;
   periodLabel: string;
+  billingCycleDays: number;
+  dailyBurnUnits: number;
+  dailyBurnCost: number;
   totalUnits: number;
   totalAmount: number;
   payableAmount: number;
@@ -15,6 +18,7 @@ export interface CycleAnalytics {
   fuelSurcharge: number;
   fixedCharge: number;
   meterRent: number;
+  otherCharges: number;
   status: string;
   tod?: {
     normalUnits: number;
@@ -84,6 +88,20 @@ export interface SharasheriAudit {
   regulatoryNote: string;
 }
 
+export interface CostComponentBreakdown {
+  energyCharges: number;
+  dutyCharges: number;
+  fixedCharges: number;
+  fuelSurcharge: number;
+  meterRent: number;
+  totalCharges: number;
+  energyPercent: number;
+  dutyPercent: number;
+  fixedPercent: number;
+  fuelSurchargePercent: number;
+  meterRentPercent: number;
+}
+
 export interface AnalyticsSummary {
   totalSpentAllTime: number;
   totalSpentThisYear: number;
@@ -95,6 +113,11 @@ export interface AnalyticsSummary {
   avgUnitsPerCycle: number;
   avgUnitsPerMonth: number;
   avgCostPerUnit: number;
+  avgDailyUnits: number;
+  avgDailyCost: number;
+  peakExposurePercent: number;
+  totalBillingDays: number;
+  costBreakdown: CostComponentBreakdown;
   nextDueBill: {
     billNumber: string;
     dueDate: string;
@@ -128,6 +151,13 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
   let totalUnitsAll = 0;
   let totalPendingAmount = 0;
   let pendingBillsCount = 0;
+
+  let totalEnergyCharges = 0;
+  let totalDutyCharges = 0;
+  let totalFixedCharges = 0;
+  let totalFuelSurcharge = 0;
+  let totalMeterRent = 0;
+  let totalBillingDays = 0;
 
   const cycleHistory: CycleAnalytics[] = [];
   const monthlyBuckets: Record<string, { units: number; expenditure: number }> = {};
@@ -198,27 +228,50 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
       totalPeakUnits += peak;
     }
 
+    // Accumulate cost components
+    const cycleDays = parseInt(b.billingCycleDays || "60", 10) || 60;
+    totalBillingDays += cycleDays;
+
+    const ec = parseFloat(b.energyCharge || "0");
+    const dt = parseFloat(b.duty || "0");
+    const fc = parseFloat(b.fixedCharge || "0");
+    const fs = parseFloat(b.fuelSurcharge || "0");
+    const mr = parseFloat(b.meterRent || "0");
+
+    totalEnergyCharges += ec;
+    totalDutyCharges += dt;
+    totalFixedCharges += fc;
+    totalFuelSurcharge += fs;
+    totalMeterRent += mr;
+
     const prevDateFormatted = formatKolkataDate(b.previousReadingDate, { format: "short" });
     const currDateFormatted = formatKolkataDate(b.currentReadingDate, { format: "short" });
     const cycleLabel = `${prevDateFormatted} – ${currDateFormatted}`;
 
     const costPerUnit = units > 0 ? toDecimal2(totalAmount / units) : 0;
+    const dailyBurnUnits = cycleDays > 0 ? toDecimal2(units / cycleDays) : 0;
+    const dailyBurnCost = cycleDays > 0 ? toDecimal2(totalAmount / cycleDays) : 0;
+    const otherCharges = toDecimal2(dt + fc + fs + mr);
 
     cycleHistory.push({
       id: b.id,
       billNumber: b.billNumber,
       billDate: b.billDate,
       cycleLabel,
-      periodLabel: `${formatKolkataDate(b.billDate, { format: "short" })} (${b.billingCycleDays || 60}d)`,
+      periodLabel: `${formatKolkataDate(b.billDate, { format: "short" })} (${cycleDays}d)`,
+      billingCycleDays: cycleDays,
+      dailyBurnUnits,
+      dailyBurnCost,
       totalUnits: units,
       totalAmount,
       payableAmount,
       costPerUnit,
-      energyCharge: parseFloat(b.energyCharge || "0"),
-      duty: parseFloat(b.duty || "0"),
-      fuelSurcharge: parseFloat(b.fuelSurcharge || "0"),
-      fixedCharge: parseFloat(b.fixedCharge || "0"),
-      meterRent: parseFloat(b.meterRent || "0"),
+      energyCharge: ec,
+      duty: dt,
+      fuelSurcharge: fs,
+      fixedCharge: fc,
+      meterRent: mr,
+      otherCharges,
       status: b.status,
       tod: todSum > 0 ? {
         normalUnits: norm,
@@ -405,6 +458,29 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     }
   }
 
+  const totalChargesCombined = totalEnergyCharges + totalDutyCharges + totalFixedCharges + totalFuelSurcharge + totalMeterRent;
+  const denominatorCharges = totalChargesCombined > 0 ? totalChargesCombined : totalSpentAllTime;
+
+  const costBreakdown: CostComponentBreakdown = {
+    energyCharges: toDecimal2(totalEnergyCharges),
+    dutyCharges: toDecimal2(totalDutyCharges),
+    fixedCharges: toDecimal2(totalFixedCharges),
+    fuelSurcharge: toDecimal2(totalFuelSurcharge),
+    meterRent: toDecimal2(totalMeterRent),
+    totalCharges: toDecimal2(denominatorCharges),
+    energyPercent: denominatorCharges > 0 ? toDecimal2((totalEnergyCharges / denominatorCharges) * 100) : 0,
+    dutyPercent: denominatorCharges > 0 ? toDecimal2((totalDutyCharges / denominatorCharges) * 100) : 0,
+    fixedPercent: denominatorCharges > 0 ? toDecimal2((totalFixedCharges / denominatorCharges) * 100) : 0,
+    fuelSurchargePercent: denominatorCharges > 0 ? toDecimal2((totalFuelSurcharge / denominatorCharges) * 100) : 0,
+    meterRentPercent: denominatorCharges > 0 ? toDecimal2((totalMeterRent / denominatorCharges) * 100) : 0,
+  };
+
+  const avgDailyUnits = totalBillingDays > 0 ? toDecimal2(totalUnitsAll / totalBillingDays) : 0;
+  const avgDailyCost = totalBillingDays > 0 ? toDecimal2(totalSpentAllTime / totalBillingDays) : 0;
+  const peakExposurePercent = (totalNormalUnits + totalOffPeakUnits + totalPeakUnits) > 0
+    ? toDecimal2((totalPeakUnits / (totalNormalUnits + totalOffPeakUnits + totalPeakUnits)) * 100)
+    : 0;
+
   return {
     totalSpentAllTime: toDecimal2(totalSpentAllTime),
     totalSpentThisYear: toDecimal2(totalSpentThisYear),
@@ -416,6 +492,11 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     avgUnitsPerCycle,
     avgUnitsPerMonth,
     avgCostPerUnit,
+    avgDailyUnits,
+    avgDailyCost,
+    peakExposurePercent,
+    totalBillingDays,
+    costBreakdown,
     nextDueBill,
     cycleHistory: cycleHistory.reverse(), // latest first for display
     monthlyNormalized,
