@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { IndianRupee, Zap, Clock, AlertTriangle, TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
+import { IndianRupee, Zap, Receipt, AlertTriangle, TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatINR, formatIndianNumber, formatUnits, formatKolkataDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -22,8 +22,10 @@ export function StatCards({ analytics }: StatCardsProps) {
     avgUnitsPerCycle,
     avgUnitsPerMonth,
     avgCostPerUnit,
-    nextDueBill,
+    cycleHistory,
   } = analytics;
+
+  const latestCycle = cycleHistory && cycleHistory.length > 0 ? cycleHistory[0] : null;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -142,59 +144,37 @@ export function StatCards({ analytics }: StatCardsProps) {
               <span className="text-sm font-normal text-slate-500">kWh/cycle</span>
             </div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              ≈ <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">{formatIndianNumber(avgUnitsPerMonth, 0)} kWh/month</span> • Avg: ₹{avgCostPerUnit}/kWh
+              ≈ <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">{formatIndianNumber(avgUnitsPerMonth, 0)} kWh/month</span> (Bi-monthly)
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* 4. Next Payment Due Alert */}
+      {/* 4. Average Tariff */}
       <Card className="relative overflow-hidden border-slate-200/80 dark:border-slate-800">
-        <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 dark:bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
         <CardContent className="p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Next Due Date
+              Average Tariff
             </span>
-            <div
-              className={cn(
-                "h-9 w-9 rounded-xl flex items-center justify-center",
-                nextDueBill?.isOverdue
-                  ? "bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 animate-pulse"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-              )}
-            >
-              <Clock className="h-5 w-5" />
+            <div className="h-9 w-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Receipt className="h-5 w-5" />
             </div>
           </div>
 
           <div className="mt-3">
-            <div
-              className={cn(
-                "text-2xl font-black tracking-tight font-mono",
-                nextDueBill?.isOverdue
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-slate-900 dark:text-slate-100"
-              )}
-            >
-              {nextDueBill ? formatKolkataDate(nextDueBill.dueDate) : "All Clear"}
+            <div className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 font-mono">
+              ₹{avgCostPerUnit > 0 ? avgCostPerUnit.toFixed(2) : "0.00"}{" "}
+              <span className="text-sm font-normal text-slate-500">/kWh</span>
             </div>
             <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {nextDueBill ? (
-                <span
-                  className={cn(
-                    "font-semibold",
-                    nextDueBill.isOverdue
-                      ? "text-rose-600 dark:text-rose-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  )}
-                >
-                  {nextDueBill.isOverdue
-                    ? `Overdue by ${Math.abs(nextDueBill.daysRemaining)} days`
-                    : `Due in ${nextDueBill.daysRemaining} days`} ({formatINR(nextDueBill.amount)})
+              {latestCycle?.costPerUnit ? (
+                <span>
+                  Latest: <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">₹{latestCycle.costPerUnit.toFixed(2)}/kWh</span> • LT-1 Dom
                 </span>
               ) : (
-                "No pending bills due"
+                "Effective rate across all cycles"
               )}
             </div>
           </div>
