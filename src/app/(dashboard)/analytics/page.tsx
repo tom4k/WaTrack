@@ -20,7 +20,6 @@ import { ExpenditureChart } from "@/components/analytics/ExpenditureChart";
 import { TODBreakdownChart } from "@/components/analytics/TODBreakdownChart";
 import { CostAnatomyCard } from "@/components/analytics/CostAnatomyCard";
 import { TariffTierCard } from "@/components/analytics/TariffTierCard";
-import { TODOptimizerCard } from "@/components/analytics/TODOptimizerCard";
 import { CycleLedgerTable } from "@/components/analytics/CycleLedgerTable";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { formatINR, formatIndianNumber, formatUnits } from "@/lib/formatters";
@@ -188,70 +187,64 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        {/* Section 4: Time-Of-Day Distribution & Interactive Load Shifter */}
+        {/* Section 4: Time-Of-Day Distribution & Year-Over-Year Comparison */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <TODBreakdownChart todDistribution={analytics.todDistribution} />
           </div>
           <div className="lg:col-span-2">
-            <TODOptimizerCard
-              todDistribution={analytics.todDistribution}
-              avgUnitsPerCycle={analytics.avgUnitsPerCycle}
-            />
+            <Card className="border-slate-200/80 dark:border-slate-800 h-full flex flex-col justify-between">
+              <CardHeader>
+                <CardTitle>Year-Over-Year Historical Comparison</CardTitle>
+                <CardDescription>
+                  Annual electricity usage, bill counts, and total billing expenditure by calendar year
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-bold uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Year</th>
+                        <th className="py-2.5 px-3 text-right">Bills Count</th>
+                        <th className="py-2.5 px-3 text-right">Total Units</th>
+                        <th className="py-2.5 px-3 text-right">Total Expenditure</th>
+                        <th className="py-2.5 px-3 text-right">Avg Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+                      {analytics.yearlyComparison.map((y: any) => {
+                        const avgRate = y.units > 0 ? (y.expenditure / y.units).toFixed(2) : "0.00";
+                        return (
+                          <tr key={y.year} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                            <td className="py-3 px-3 font-bold text-sm text-slate-900 dark:text-slate-100 font-sans">
+                              {y.year}
+                            </td>
+                            <td className="py-3 px-3 text-right text-slate-500 font-sans">
+                              {y.billsCount} {y.billsCount === 1 ? "bill" : "bills"}
+                            </td>
+                            <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                              {formatUnits(y.units)}
+                            </td>
+                            <td className="py-3 px-3 text-right font-bold">
+                              {formatINR(y.expenditure)}
+                            </td>
+                            <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-300">
+                              ₹{avgRate} / kWh
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
         {/* Section 5: Detailed Billing Cycle Ledger Table */}
         <CycleLedgerTable cycleHistory={analytics.cycleHistory} />
-
-        {/* Section 6: Year-Over-Year Summary Ledger */}
-        <Card className="border-slate-200/80 dark:border-slate-800">
-          <CardHeader>
-            <CardTitle>Year-Over-Year Historical Comparison</CardTitle>
-            <CardDescription>
-              Annual electricity usage, bill counts, and total billing expenditure by calendar year
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-bold uppercase tracking-wider">
-                    <th className="py-2.5 px-3">Year</th>
-                    <th className="py-2.5 px-3 text-right">Bills Count</th>
-                    <th className="py-2.5 px-3 text-right">Total Units</th>
-                    <th className="py-2.5 px-3 text-right">Total Expenditure</th>
-                    <th className="py-2.5 px-3 text-right">Avg Rate</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
-                  {analytics.yearlyComparison.map((y: any) => {
-                    const avgRate = y.units > 0 ? (y.expenditure / y.units).toFixed(2) : "0.00";
-                    return (
-                      <tr key={y.year} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                        <td className="py-3 px-3 font-bold text-sm text-slate-900 dark:text-slate-100 font-sans">
-                          {y.year}
-                        </td>
-                        <td className="py-3 px-3 text-right text-slate-500 font-sans">
-                          {y.billsCount} {y.billsCount === 1 ? "bill" : "bills"}
-                        </td>
-                        <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                          {formatUnits(y.units)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-bold">
-                          {formatINR(y.expenditure)}
-                        </td>
-                        <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-300">
-                          ₹{avgRate} / kWh
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </AppShell>
   );
