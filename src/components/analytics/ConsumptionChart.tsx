@@ -134,11 +134,11 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
       </CardHeader>
 
       <CardContent>
-        <div className="h-[320px] w-full pt-2">
+        <div className="h-[340px] w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
-              margin={{ top: 12, right: 12, left: -10, bottom: 0 }}
+              margin={{ top: 12, right: 12, left: -10, bottom: 6 }}
               barGap={4}
               barCategoryGap="20%"
             >
@@ -146,9 +146,45 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
               <XAxis
                 dataKey="label"
                 stroke="#888888"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
+                interval={0}
+                height={38}
+                tick={({ x, y, payload }) => {
+                  const text = String(payload.value || "");
+                  const parts = text.split(" (");
+                  const datePart = parts[0];
+                  const daysPart = parts[1] ? `(${parts[1]}` : "";
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      <text
+                        x={0}
+                        y={0}
+                        dy={12}
+                        textAnchor="middle"
+                        fill="#94a3b8"
+                        fontSize={10}
+                        fontWeight={500}
+                      >
+                        {datePart}
+                      </text>
+                      {daysPart && (
+                        <text
+                          x={0}
+                          y={0}
+                          dy={25}
+                          textAnchor="middle"
+                          fill="#64748b"
+                          fontSize={9}
+                          fontFamily="monospace"
+                        >
+                          {daysPart}
+                        </text>
+                      )}
+                    </g>
+                  );
+                }}
               />
               {/* Left Y-Axis for Units Consumed */}
               <YAxis
