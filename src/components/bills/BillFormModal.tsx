@@ -747,8 +747,8 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             <th className="text-left p-1.5">Zone (യൂണിറ്റ്)</th>
                             <th className="p-1.5">Current (നിലവിൽ)</th>
                             <th className="p-1.5">Past (മുൻ)</th>
-                            <th className="p-1.5 text-slate-700 dark:text-slate-300 font-bold">Used (ഉപഭോഗം)</th>
-                            <th className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
+                            <th className="p-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Used (ഉപഭോഗം)</th>
+                            <th className="p-1.5 text-slate-500 font-medium">ശരാശരി (Sharasheri)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
@@ -758,10 +758,10 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             </td>
                             <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingNormal || "3575"}</td>
                             <td className="p-1.5 text-slate-500">{prevReadingNormal || "3227"}</td>
-                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">
                               {usedUnitsNormal || (currReadingNormal && prevReadingNormal ? (parseFloat(currReadingNormal) - parseFloat(prevReadingNormal)).toFixed(0) : "348")}
                             </td>
-                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsNormal || "402"}</td>
+                            <td className="p-1.5 text-slate-500 dark:text-slate-400">{consumedUnitsNormal || "402"}</td>
                           </tr>
                           <tr>
                             <td className="text-left p-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
@@ -769,10 +769,10 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             </td>
                             <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingOffPeak || "4177"}</td>
                             <td className="p-1.5 text-slate-500">{prevReadingOffPeak || "3851"}</td>
-                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">
                               {usedUnitsOffPeak || (currReadingOffPeak && prevReadingOffPeak ? (parseFloat(currReadingOffPeak) - parseFloat(prevReadingOffPeak)).toFixed(0) : "326")}
                             </td>
-                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsOffPeak || "322"}</td>
+                            <td className="p-1.5 text-slate-500 dark:text-slate-400">{consumedUnitsOffPeak || "322"}</td>
                           </tr>
                           <tr>
                             <td className="text-left p-1.5 font-sans font-medium text-slate-700 dark:text-slate-300">
@@ -780,10 +780,10 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             </td>
                             <td className="p-1.5 text-slate-800 dark:text-slate-200">{currReadingPeak || "422"}</td>
                             <td className="p-1.5 text-slate-500">{prevReadingPeak || "410"}</td>
-                            <td className="p-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">
                               {usedUnitsPeak || (currReadingPeak && prevReadingPeak ? (parseFloat(currReadingPeak) - parseFloat(prevReadingPeak)).toFixed(0) : "12")}
                             </td>
-                            <td className="p-1.5 font-bold text-emerald-600 dark:text-emerald-400">{consumedUnitsPeak || "28"}</td>
+                            <td className="p-1.5 text-slate-500 dark:text-slate-400">{consumedUnitsPeak || "28"}</td>
                           </tr>
                           <tr className="border-t border-slate-200 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-800/40 font-bold">
                             <td className="text-left p-1.5 font-sans text-slate-900 dark:text-slate-100">
@@ -977,8 +977,8 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                         <th className="text-left py-1 font-sans">Zone</th>
                         <th className="py-1">Current (നിലവിൽ)</th>
                         <th className="py-1">Past (മുൻ)</th>
-                        <th className="py-1">Used (ഉപഭോഗം)</th>
-                        <th className="py-1 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
+                        <th className="py-1 text-emerald-600 dark:text-emerald-400 font-bold">Used (ഉപഭോഗം)</th>
+                        <th className="py-1 text-slate-500 font-medium">ശരാശരി (Sharasheri)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
@@ -1017,7 +1017,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={usedUnitsNormal}
                             onChange={(e) => setUsedUnitsNormal(e.target.value)}
                             placeholder="348"
-                            className="h-8 font-mono text-xs text-right font-semibold"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
                           />
                         </td>
                         <td className="py-1.5 pl-2">
@@ -1025,7 +1025,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={consumedUnitsNormal}
                             onChange={(e) => setConsumedUnitsNormal(e.target.value)}
                             placeholder="402"
-                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                            className="h-8 font-mono text-xs text-right text-slate-600 dark:text-slate-400"
                           />
                         </td>
                       </tr>
@@ -1064,7 +1064,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={usedUnitsOffPeak}
                             onChange={(e) => setUsedUnitsOffPeak(e.target.value)}
                             placeholder="326"
-                            className="h-8 font-mono text-xs text-right font-semibold"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
                           />
                         </td>
                         <td className="py-1.5 pl-2">
@@ -1072,7 +1072,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={consumedUnitsOffPeak}
                             onChange={(e) => setConsumedUnitsOffPeak(e.target.value)}
                             placeholder="322"
-                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                            className="h-8 font-mono text-xs text-right text-slate-600 dark:text-slate-400"
                           />
                         </td>
                       </tr>
@@ -1111,7 +1111,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={usedUnitsPeak}
                             onChange={(e) => setUsedUnitsPeak(e.target.value)}
                             placeholder="12"
-                            className="h-8 font-mono text-xs text-right font-semibold"
+                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
                           />
                         </td>
                         <td className="py-1.5 pl-2">
@@ -1119,7 +1119,7 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                             value={consumedUnitsPeak}
                             onChange={(e) => setConsumedUnitsPeak(e.target.value)}
                             placeholder="28"
-                            className="h-8 font-mono text-xs text-right font-bold text-emerald-600 dark:text-emerald-400"
+                            className="h-8 font-mono text-xs text-right text-slate-600 dark:text-slate-400"
                           />
                         </td>
                       </tr>

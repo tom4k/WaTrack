@@ -194,8 +194,8 @@ export function BillDetailsDrawer({
                     <th className="text-left py-1.5">Zone (യൂണിറ്റ്)</th>
                     <th className="py-1.5">Current (നിലവിൽ)</th>
                     <th className="py-1.5">Past (മുൻ)</th>
-                    <th className="py-1.5">Used Units (ഉപഭോഗം)</th>
-                    <th className="py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">ശരാശരി (Sharasheri)</th>
+                    <th className="py-1.5 text-emerald-600 dark:text-emerald-400 font-bold">Used Units (ഉപഭോഗം)</th>
+                    <th className="py-1.5 text-slate-500 font-medium">ശരാശരി (Sharasheri)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
@@ -205,10 +205,10 @@ export function BillDetailsDrawer({
                     </td>
                     <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingNormal || "3575"}</td>
                     <td className="py-2 text-slate-500">{bill.prevReadingNormal || "3227"}</td>
-                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
                       {bill.usedUnitsNormal || (bill.currReadingNormal && bill.prevReadingNormal ? (parseFloat(bill.currReadingNormal) - parseFloat(bill.prevReadingNormal)).toFixed(0) : "348")}
                     </td>
-                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                    <td className="py-2 text-slate-500 dark:text-slate-400">
                       {bill.consumedUnitsNormal || "402"}
                     </td>
                   </tr>
@@ -218,10 +218,10 @@ export function BillDetailsDrawer({
                     </td>
                     <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingOffPeak || "4177"}</td>
                     <td className="py-2 text-slate-500">{bill.prevReadingOffPeak || "3851"}</td>
-                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
                       {bill.usedUnitsOffPeak || (bill.currReadingOffPeak && bill.prevReadingOffPeak ? (parseFloat(bill.currReadingOffPeak) - parseFloat(bill.prevReadingOffPeak)).toFixed(0) : "326")}
                     </td>
-                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                    <td className="py-2 text-slate-500 dark:text-slate-400">
                       {bill.consumedUnitsOffPeak || "322"}
                     </td>
                   </tr>
@@ -231,10 +231,10 @@ export function BillDetailsDrawer({
                     </td>
                     <td className="py-2 text-slate-800 dark:text-slate-200">{bill.currReadingPeak || "422"}</td>
                     <td className="py-2 text-slate-500">{bill.prevReadingPeak || "410"}</td>
-                    <td className="py-2 font-semibold text-slate-700 dark:text-slate-300">
+                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
                       {bill.usedUnitsPeak || (bill.currReadingPeak && bill.prevReadingPeak ? (parseFloat(bill.currReadingPeak) - parseFloat(bill.prevReadingPeak)).toFixed(0) : "12")}
                     </td>
-                    <td className="py-2 font-bold text-emerald-600 dark:text-emerald-400">
+                    <td className="py-2 text-slate-500 dark:text-slate-400">
                       {bill.consumedUnitsPeak || "28"}
                     </td>
                   </tr>
