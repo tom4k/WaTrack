@@ -303,7 +303,7 @@ export function BillDetailsDrawer({
                     {audit.reason}
                   </p>
 
-                  <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs">
                     <div
                       className={`p-2 rounded-lg border text-center ${
                         isAvg
@@ -312,12 +312,14 @@ export function BillDetailsDrawer({
                       }`}
                     >
                       <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">
-                        Raw Meter (ഉപഭോഗം)
+                        Billed Meter
                       </div>
-                      <div className="font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                      <div className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                         {audit.rawMeterUnits} kWh
                       </div>
+                      <div className="text-[9px] text-slate-400 font-sans mt-0.5">Physical meter</div>
                     </div>
+
                     <div
                       className={`p-2 rounded-lg border text-center ${
                         isAvg
@@ -326,18 +328,14 @@ export function BillDetailsDrawer({
                       }`}
                     >
                       <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">
-                        ശരാശരി Benchmark
+                        Benchmark ശരാശരി
                       </div>
-                      <div
-                        className={`font-bold mt-0.5 ${
-                          isAvg
-                            ? "text-amber-700 dark:text-amber-300 font-black"
-                            : "text-slate-700 dark:text-slate-300"
-                        }`}
-                      >
+                      <div className="font-bold text-amber-600 dark:text-amber-400 mt-0.5">
                         {audit.sharasheriUnits} kWh
                       </div>
+                      <div className="text-[9px] text-slate-400 font-sans mt-0.5">Reg 122/123 profile</div>
                     </div>
+
                     <div
                       className={`p-2 rounded-lg border text-center ${
                         isAvg
@@ -346,7 +344,7 @@ export function BillDetailsDrawer({
                       }`}
                     >
                       <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">
-                        Variance vs Profile
+                        Usage vs Profile
                       </div>
                       <div
                         className={`font-bold mt-0.5 ${
@@ -360,13 +358,46 @@ export function BillDetailsDrawer({
                         {audit.varianceUnits > 0
                           ? `+${audit.varianceUnits}`
                           : audit.varianceUnits}{" "}
-                        kWh ({audit.variancePercent}%)
+                        kWh
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-sans mt-0.5">
+                        {audit.variancePercent}% vs avg
+                      </div>
+                    </div>
+
+                    <div
+                      className={`p-2 rounded-lg border text-center ${
+                        isAvg
+                          ? "bg-white/80 dark:bg-slate-900/60 border-amber-200/70 dark:border-amber-900/40"
+                          : "bg-white/80 dark:bg-slate-900/60 border-emerald-200/70 dark:border-emerald-900/40"
+                      }`}
+                    >
+                      <div className="text-[10px] text-slate-500 font-sans uppercase font-medium">
+                        {isAvg ? "Extra Cost" : "Savings vs Profile"}
+                      </div>
+                      <div
+                        className={`font-bold mt-0.5 ${
+                          isAvg
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        ₹{audit.costImpact.toFixed(2)}
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-sans mt-0.5">
+                        {isAvg ? "Assessed rate" : "Saved vs average"}
                       </div>
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-600 dark:text-slate-400 pt-1">
-                    📌 {audit.regulatoryNote}
+                  {audit.tariffProofSummary && (
+                    <div className="p-2 rounded-md bg-white/70 dark:bg-slate-900/50 border border-emerald-200/60 dark:border-emerald-900/40 text-[11px] text-emerald-800 dark:text-emerald-300 font-mono">
+                      ✓ {audit.tariffProofSummary}
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-200/40 dark:border-slate-800/40">
+                    📌 <strong>KSEB Supply Code Insight (Reg 122 & 123):</strong> {audit.regulatoryNote}
                   </p>
                 </div>
               );
