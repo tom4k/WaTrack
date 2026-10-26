@@ -352,9 +352,34 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
         setFixedCharge(b.fixedCharge || "500.00");
         setMeterRent(b.meterRent || "30.00");
         setRoundOff(b.roundOff || "0.00");
-        setArrears(b.arrears || "0.00");
-        setTotalAmount(b.totalAmount || "");
-        setPayableAmount(b.payableAmount || b.totalAmount || "");
+        const rawTot = b.totalAmount || "";
+        const rawPay = b.payableAmount || "";
+        const numTot = parseFloat(String(rawTot).replace(/[^0-9.-]/g, "")) || 0;
+        const numPay = parseFloat(String(rawPay).replace(/[^0-9.-]/g, "")) || 0;
+
+        let finalPay = rawPay;
+        let finalTot = rawTot;
+
+        if (numPay <= 0 && numTot > 0) {
+          finalPay = rawTot;
+        } else if (numTot <= 0 && numPay > 0) {
+          finalTot = rawPay;
+        } else if (numPay <= 0 && numTot <= 0) {
+          const sumCharges =
+            (parseFloat(b.energyCharge) || 0) +
+            (parseFloat(b.duty) || 0) +
+            (parseFloat(b.fuelSurcharge) || 0) +
+            (parseFloat(b.fixedCharge) || 0) +
+            (parseFloat(b.meterRent) || 0) +
+            (parseFloat(b.roundOff) || 0);
+          if (sumCharges > 0) {
+            finalPay = sumCharges.toFixed(2);
+            finalTot = sumCharges.toFixed(2);
+          }
+        }
+
+        setTotalAmount(finalTot);
+        setPayableAmount(finalPay);
         setRemarks(b.remarks || "");
       }
 
@@ -641,7 +666,13 @@ export function BillFormModal({ open, onOpenChange, billToEdit, onSuccess }: Bil
                   <div>
                     <span className="text-[11px] font-mono text-slate-500 block uppercase">Payable Amount</span>
                     <span className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-                      {formatINR(payableAmount || totalAmount || "0")}
+                      {formatINR(
+                        parseFloat(payableAmount) > 0
+                          ? payableAmount
+                          : parseFloat(totalAmount) > 0
+                            ? totalAmount
+                            : "0"
+                      )}
                     </span>
                   </div>
                   <div className="text-right">

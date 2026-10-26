@@ -77,3 +77,33 @@ describe("detectBillingComputation", () => {
     expect(audit.badgeLabel).toBe("⚡ Meter Reading Matched");
   });
 });
+
+describe("resolvePayableAmount", () => {
+  it("resolves payable amount to total demand when net payable on PDF was 0.00 due to payment adjustment", async () => {
+    const { resolvePayableAmount } = await import("./bill-parser");
+    const result = resolvePayableAmount("0.00", "6020.00", {});
+    expect(result.payableAmount).toBe("6020.00");
+    expect(result.totalAmount).toBe("6020.00");
+  });
+
+  it("calculates sum of itemized charges when both payable and total amounts are 0 or empty", async () => {
+    const { resolvePayableAmount } = await import("./bill-parser");
+    const result = resolvePayableAmount("0.00", "0.00", {
+      energyCharge: "4971.92",
+      duty: "497.19",
+      fuelSurcharge: "20.58",
+      fixedCharge: "500.00",
+      meterRent: "30.00",
+      roundOff: "0.31",
+    });
+    expect(result.payableAmount).toBe("6020.00");
+    expect(result.totalAmount).toBe("6020.00");
+  });
+
+  it("keeps normal non-zero amounts intact", async () => {
+    const { resolvePayableAmount } = await import("./bill-parser");
+    const result = resolvePayableAmount("5543.00", "5543.00", {});
+    expect(result.payableAmount).toBe("5543.00");
+  });
+});
+

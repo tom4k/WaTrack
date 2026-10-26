@@ -95,9 +95,8 @@ How to extract data from both bill formats:
     - Auto Recovery FS[FSM] -> fuelSurcharge (e.g. 20.58)
     - Electricity Duty[ED] -> duty (e.g. 497.19)
     - Meter Rent[MR] -> meterRent (e.g. 30.00)
-    - Round Off -> roundOff (e.g. 0.31)
-    - Total Amt.(Bill#...) -> totalAmount (e.g. 6020.00)
-    - Net Payable or Demand Amount -> payableAmount
+    - Total Amt.(Bill#...) / Demand for MM/YYYY -> totalAmount (e.g. 6020.00)
+    - CRITICAL for payableAmount: Extract the full bill demand amount (Total Amt / Demand for the period, e.g. 6020.00). Even if the bill has "Net Payable: 0.00" because a payment or adjustment was already made, payableAmount MUST BE the billing demand (e.g. 6020.00), NEVER 0.00. Both totalAmount and payableAmount must reflect the full billing charge.
 
 Return ONLY a clean JSON object with this exact shape:
 {
@@ -312,6 +311,16 @@ async function parseWithGemini(
         ? String(b.totalUnits)
         : totUsed;
 
+      const resolvedAmounts = resolvePayableAmount(b.payableAmount, b.totalAmount, {
+        energyCharge: b.energyCharge,
+        duty: b.duty,
+        fuelSurcharge: b.fuelSurcharge,
+        fixedCharge: b.fixedCharge,
+        meterRent: b.meterRent,
+        roundOff: b.roundOff,
+        arrears: b.arrears,
+      });
+
       return {
         success: true,
         source: "gemini_ai",
@@ -364,8 +373,8 @@ async function parseWithGemini(
           meterRent: String(b.meterRent || "30.00"),
           roundOff: String(b.roundOff || "0.00"),
           arrears: String(b.arrears || "0.00"),
-          totalAmount: String(b.totalAmount || "0.00"),
-          payableAmount: String(b.payableAmount || b.totalAmount || "0.00"),
+          totalAmount: resolvedAmounts.totalAmount,
+          payableAmount: resolvedAmounts.payableAmount,
           remarks: b.remarks ? String(b.remarks).trim() : null,
         },
         computationAudit: detectBillingComputation({
@@ -385,7 +394,7 @@ async function parseWithGemini(
           totalUnits: totUnits,
           energyCharge: String(b.energyCharge || "0.00"),
           fuelSurcharge: String(b.fuelSurcharge || "0.00"),
-          payableAmount: String(b.payableAmount || b.totalAmount || "0.00"),
+          payableAmount: resolvedAmounts.payableAmount,
           remarks: b.remarks ? String(b.remarks).trim() : null,
         }),
         rawText,
@@ -561,6 +570,57 @@ function extractFromText(text: string, customRemark?: string): ParsedBillResult 
     }),
     rawText: text,
   };
+}
+
+export function resolvePayableAmount(
+  payableAmt: any,
+  totalAmt: any,
+  charges?: {
+    energyCharge?: any;
+    duty?: any;
+    fuelSurcharge?: any;
+    fixedCharge?: any;
+    meterRent?: any;
+    roundOff?: any;
+    arrears?: any;
+  }
+): { payableAmount: string; totalAmount: string } {
+  const parseVal = (v: any): number => {
+    if (v === undefined || v === null || v === "") return 0;
+    const num = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+    return isNaN(num) ? 0 : num;
+  };
+
+  const p = parseVal(payableAmt);
+  const t = parseVal(totalAmt);
+
+  // If totalAmount > 0 and payableAmount is 0 (or was deducted due to prior payment), use total demand
+  if (t > 0 && p <= 0) {
+    return { payableAmount: t.toFixed(2), totalAmount: t.toFixed(2) };
+  }
+  if (p > 0 && t <= 0) {
+    return { payableAmount: p.toFixed(2), totalAmount: p.toFixed(2) };
+  }
+  if (p > 0 && t > 0) {
+    return { payableAmount: p.toFixed(2), totalAmount: t.toFixed(2) };
+  }
+
+  // Fallback: sum of all itemized charges
+  if (charges) {
+    const sum =
+      parseVal(charges.energyCharge) +
+      parseVal(charges.duty) +
+      parseVal(charges.fuelSurcharge) +
+      parseVal(charges.fixedCharge) +
+      parseVal(charges.meterRent) +
+      parseVal(charges.roundOff) +
+      parseVal(charges.arrears);
+    if (sum > 0) {
+      return { payableAmount: sum.toFixed(2), totalAmount: sum.toFixed(2) };
+    }
+  }
+
+  return { payableAmount: "0.00", totalAmount: "0.00" };
 }
 
 function calcDiff(curr: string, prev: string): string {
