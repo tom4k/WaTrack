@@ -75,9 +75,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    const updatePayload: any = {
-      ...parsed.data,
-    };
+    // Only set fields that were explicitly supplied in the request data (prevents schema defaults from wiping existing data)
+    const updatePayload: any = {};
+    for (const key of Object.keys(data)) {
+      if (data[key] !== undefined && (parsed.data as any)[key] !== undefined) {
+        updatePayload[key] = (parsed.data as any)[key];
+      }
+    }
 
     if (savedDoc) {
       updatePayload.documentPath = savedDoc.storedFilename;

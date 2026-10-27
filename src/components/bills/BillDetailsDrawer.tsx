@@ -56,8 +56,8 @@ export function BillDetailsDrawer({
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch(`/api/bills/${bill.id}`, {
-        method: "PUT",
+      const res = await fetch(`/api/bills/${bill.id}/document`, {
+        method: "POST",
         body: formData,
       });
 
