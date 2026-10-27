@@ -21,7 +21,7 @@ import { ExpenditureChart } from "@/components/analytics/ExpenditureChart";
 import { TODBreakdownChart } from "@/components/analytics/TODBreakdownChart";
 import { CostAnatomyCard } from "@/components/analytics/CostAnatomyCard";
 import { TariffTierCard } from "@/components/analytics/TariffTierCard";
-import { SharasheriTile } from "@/components/analytics/SharasheriTile";
+import { SharasheriBenchmarkChart } from "@/components/analytics/SharasheriBenchmarkChart";
 import { CycleLedgerTable } from "@/components/analytics/CycleLedgerTable";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { formatINR, formatIndianNumber, formatUnits } from "@/lib/formatters";
@@ -203,10 +203,8 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          {/* Sharasheri Benchmark & Actual Used Units Analysis Tile */}
-          {analytics.sharasheriAudit && (
-            <SharasheriTile audit={analytics.sharasheriAudit} />
-          )}
+          {/* Sharasheri (ശരാശരി) Benchmark & Average History Graph */}
+          <SharasheriBenchmarkChart cycleHistory={analytics.cycleHistory} />
 
           {/* Cost Anatomy Breakdown */}
           {analytics.costBreakdown && (

@@ -10,6 +10,9 @@ export interface CycleAnalytics {
   dailyBurnUnits: number;
   dailyBurnCost: number;
   totalUnits: number;
+  sharasheriUnits?: number;
+  varianceUnits?: number;
+  variancePercentage?: number;
   totalAmount: number;
   payableAmount: number;
   costPerUnit: number;
@@ -27,6 +30,11 @@ export interface CycleAnalytics {
     normalPercent: number;
     offPeakPercent: number;
     peakPercent: number;
+  };
+  sharasheriTod?: {
+    normalUnits: number;
+    offPeakUnits: number;
+    peakUnits: number;
   };
 }
 
@@ -266,6 +274,14 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     const dailyBurnCost = cycleDays > 0 ? toDecimal2(totalAmount / cycleDays) : 0;
     const otherCharges = toDecimal2(dt + fc + fs + mr);
 
+    const normSharasheri = parseFloat(b.consumedUnitsNormal || "0");
+    const offSharasheri = parseFloat(b.consumedUnitsOffPeak || "0");
+    const peakSharasheri = parseFloat(b.consumedUnitsPeak || "0");
+    const sharasheriSum = normSharasheri + offSharasheri + peakSharasheri;
+    const sharasheriUnits = toDecimal2(sharasheriSum > 0 ? sharasheriSum : units);
+    const varianceUnits = toDecimal2(units - sharasheriUnits);
+    const variancePercentage = sharasheriUnits > 0 ? toDecimal2((varianceUnits / sharasheriUnits) * 100) : 0;
+
     cycleHistory.push({
       id: b.id,
       billNumber: b.billNumber,
@@ -276,6 +292,9 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
       dailyBurnUnits,
       dailyBurnCost,
       totalUnits: units,
+      sharasheriUnits,
+      varianceUnits,
+      variancePercentage,
       totalAmount,
       payableAmount,
       costPerUnit,
@@ -293,6 +312,11 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
         normalPercent: toDecimal2((norm / todSum) * 100),
         offPeakPercent: toDecimal2((offp / todSum) * 100),
         peakPercent: toDecimal2((peak / todSum) * 100),
+      } : undefined,
+      sharasheriTod: sharasheriSum > 0 ? {
+        normalUnits: normSharasheri,
+        offPeakUnits: offSharasheri,
+        peakUnits: peakSharasheri,
       } : undefined,
     });
 
