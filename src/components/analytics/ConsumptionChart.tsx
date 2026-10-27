@@ -58,7 +58,7 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                Units Consumed:
+                Used Units (Meter Advance):
               </span>
               <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
                 {formatIndianNumber(data.units, 0)} kWh
@@ -109,7 +109,7 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
           <CardTitle>Electricity Consumption & Bill History</CardTitle>
           <CardDescription>
             {viewMode === "cycles"
-              ? "Bi-monthly KSEB spot bill cycles (~60 days) comparing units consumed (kWh) and bill amount (₹)"
+              ? "Bi-monthly KSEB spot bill cycles (~60 days) comparing actual used units (kWh) and bill amount (₹)"
               : "Normalized calendar monthly consumption (kWh) vs monthly expenditure (₹)"}
           </CardDescription>
         </div>
@@ -233,7 +233,7 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
                 dataKey="units"
                 fill="#10b981"
                 radius={[4, 4, 0, 0]}
-                name="Units Consumed (kWh)"
+                name="Used Units (kWh)"
                 maxBarSize={36}
               />
               <Bar

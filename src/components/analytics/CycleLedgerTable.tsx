@@ -252,7 +252,7 @@ export function CycleLedgerTable({ cycleHistory, yearlyComparison }: CycleLedger
                 <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-bold uppercase tracking-wider">
                   <th className="py-3 px-3">Calendar Year</th>
                   <th className="py-3 px-3 text-right">Bills Count</th>
-                  <th className="py-3 px-3 text-right">Total Units Consumed</th>
+                  <th className="py-3 px-3 text-right">Used Units (kWh)</th>
                   <th className="py-3 px-3 text-right">Total Expenditure</th>
                   <th className="py-3 px-3 text-right">Average Effective Rate</th>
                 </tr>

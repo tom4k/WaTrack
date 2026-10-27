@@ -175,7 +175,20 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     const totalAmount = parseFloat(b.totalAmount || "0");
     const payableAmount = parseFloat(b.payableAmount || "0");
     const paidAmount = parseFloat(b.paidAmount || "0");
-    const units = parseFloat(b.totalUnits || "0");
+    // Calculate actual physical used units (meter advance) for this bill
+    const rawNormal = b.usedUnitsNormal
+      ? parseFloat(b.usedUnitsNormal)
+      : (b.currReadingNormal && b.prevReadingNormal ? Math.max(0, parseFloat(b.currReadingNormal) - parseFloat(b.prevReadingNormal)) : 0);
+    const rawOffPeak = b.usedUnitsOffPeak
+      ? parseFloat(b.usedUnitsOffPeak)
+      : (b.currReadingOffPeak && b.prevReadingOffPeak ? Math.max(0, parseFloat(b.currReadingOffPeak) - parseFloat(b.prevReadingOffPeak)) : 0);
+    const rawPeak = b.usedUnitsPeak
+      ? parseFloat(b.usedUnitsPeak)
+      : (b.currReadingPeak && b.prevReadingPeak ? Math.max(0, parseFloat(b.currReadingPeak) - parseFloat(b.prevReadingPeak)) : 0);
+    const sumRaw = rawNormal + rawOffPeak + rawPeak;
+
+    // Use actual used units for consumption data and not Sharasheri
+    const units = parseFloat(b.totalUsedUnits || (sumRaw > 0 ? String(sumRaw) : b.totalUnits) || "0");
     const balance = Math.max(0, payableAmount - paidAmount);
 
     totalSpentAllTime += totalAmount;
@@ -216,10 +229,10 @@ export function computeAnalytics(bills: any[]): AnalyticsSummary {
     yearlyBuckets[billYear].expenditure += totalAmount;
     yearlyBuckets[billYear].count += 1;
 
-    // TOD breakdown
-    const norm = parseFloat(b.consumedUnitsNormal || "0");
-    const offp = parseFloat(b.consumedUnitsOffPeak || "0");
-    const peak = parseFloat(b.consumedUnitsPeak || "0");
+    // TOD breakdown - using actual used units (not Sharasheri consumed units)
+    const norm = rawNormal > 0 ? rawNormal : parseFloat(b.usedUnitsNormal || b.consumedUnitsNormal || "0");
+    const offp = rawOffPeak > 0 ? rawOffPeak : parseFloat(b.usedUnitsOffPeak || b.consumedUnitsOffPeak || "0");
+    const peak = rawPeak > 0 ? rawPeak : parseFloat(b.usedUnitsPeak || b.consumedUnitsPeak || "0");
     const todSum = norm + offp + peak;
 
     if (todSum > 0) {

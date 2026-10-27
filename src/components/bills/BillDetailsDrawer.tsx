@@ -199,9 +199,9 @@ export function BillDetailsDrawer({
             </div>
 
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
-              <span className="text-[10px] uppercase font-bold text-emerald-500">Billed Units</span>
+              <span className="text-[10px] uppercase font-bold text-emerald-500">Used Units (ഉപഭോഗം)</span>
               <p className="text-sm font-black font-mono mt-0.5 text-emerald-600 dark:text-emerald-400">
-                {formatUnits(bill.totalUnits)}
+                {formatUnits(bill.totalUsedUnits || bill.totalUnits)}
               </p>
             </div>
           </div>

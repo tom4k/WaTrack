@@ -21,6 +21,7 @@ import { ExpenditureChart } from "@/components/analytics/ExpenditureChart";
 import { TODBreakdownChart } from "@/components/analytics/TODBreakdownChart";
 import { CostAnatomyCard } from "@/components/analytics/CostAnatomyCard";
 import { TariffTierCard } from "@/components/analytics/TariffTierCard";
+import { SharasheriTile } from "@/components/analytics/SharasheriTile";
 import { CycleLedgerTable } from "@/components/analytics/CycleLedgerTable";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { formatINR, formatIndianNumber, formatUnits } from "@/lib/formatters";
@@ -156,7 +157,7 @@ export default function AnalyticsPage() {
                 {formatINR(analytics.totalSpentThisYear)}
               </div>
               <p className="text-[11px] text-slate-500 mt-1 font-mono">
-                {analytics.totalUnitsThisYear} units in 2026
+                {formatIndianNumber(analytics.totalUnitsThisYear, 0)} units in 2026
               </p>
             </CardContent>
           </Card>
@@ -198,9 +199,14 @@ export default function AnalyticsPage() {
               <span>Tariff Structure & Cost Anatomy</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Statutory charges distribution and official KSEB LT-1 Domestic slab classification
+              Statutory charges distribution, Sharasheri (ശരാശരി) benchmark audit, and official KSEB LT-1 Domestic slab classification
             </p>
           </div>
+
+          {/* Sharasheri Benchmark & Actual Used Units Analysis Tile */}
+          {analytics.sharasheriAudit && (
+            <SharasheriTile audit={analytics.sharasheriAudit} />
+          )}
 
           {/* Cost Anatomy Breakdown */}
           {analytics.costBreakdown && (

@@ -311,10 +311,10 @@ export function ThermalReceiptModal({ bill, open, onOpenChange }: ThermalReceipt
                 </tr>
                 <tr className="border-t-2 border-slate-800 font-bold text-slate-950">
                   <td colSpan={3} className="text-left py-1 text-[11px]">
-                    ചാർജ്ജ് ചെയ്ത യൂണിറ്റ് (Billed Units):
+                    ഉപയോഗിച്ച യൂണിറ്റ് (Used Units):
                   </td>
                   <td colSpan={2} className="font-mono text-xs py-1">
-                    {formatIndianNumber(bill.totalUnits || bill.totalUsedUnits || 686, 0)} kWh
+                    {formatIndianNumber(bill.totalUsedUnits || bill.totalUnits || 686, 0)} kWh
                   </td>
                 </tr>
                 <tr className="border-t border-slate-300 text-slate-700">

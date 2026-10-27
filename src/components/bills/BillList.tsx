@@ -159,7 +159,7 @@ export function BillList({
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-4">Bill Particulars</th>
                   <th className="py-3 px-4">Bill Date / Due</th>
-                  <th className="py-3 px-4 text-right">Consumed</th>
+                  <th className="py-3 px-4 text-right">Used Units (kWh)</th>
                   <th className="py-3 px-4 text-right">Bill Amount</th>
                   <th className="py-3 px-4 text-right">Remaining Due</th>
                   <th className="py-3 px-4 text-center">Status</th>
@@ -208,7 +208,7 @@ export function BillList({
                       {/* Units */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {formatUnits(b.totalUnits)}
+                          {formatUnits(b.totalUsedUnits || b.totalUnits)}
                         </span>
                         {(() => {
                           const audit = detectBillingComputation(b);
