@@ -235,7 +235,10 @@ function DashboardContent() {
               cycleHistory={analytics.cycleHistory}
               monthlyNormalized={analytics.monthlyNormalized}
             />
-            <TODBreakdownChart todDistribution={analytics.todDistribution} />
+            <TODBreakdownChart
+              cycleHistory={analytics.cycleHistory}
+              todDistribution={analytics.todDistribution}
+            />
           </div>
         ) : (
           !loading && (

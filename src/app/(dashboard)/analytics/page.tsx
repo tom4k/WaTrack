@@ -174,17 +174,20 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          {/* Hero Chart: Full-Width Electricity Consumption & Bill History */}
+          {/* Hero Chart 1: Full-Width Electricity Consumption & Bill History */}
           <ConsumptionChart
             cycleHistory={analytics.cycleHistory}
             monthlyNormalized={analytics.monthlyNormalized}
           />
 
-          {/* Secondary Charts: Expenditure Trend & TOD Zone Distribution */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-            <ExpenditureChart cycleHistory={analytics.cycleHistory} />
-            <TODBreakdownChart todDistribution={analytics.todDistribution} />
-          </div>
+          {/* Hero Chart 2: Full-Width Time-of-Day (TOD) Zone Consumption Analysis */}
+          <TODBreakdownChart
+            cycleHistory={analytics.cycleHistory}
+            todDistribution={analytics.todDistribution}
+          />
+
+          {/* Chart 3: Expenditure & Cost Trends */}
+          <ExpenditureChart cycleHistory={analytics.cycleHistory} />
         </div>
 
         {/* Group 2: Tariff Structure & Cost Anatomy */}
