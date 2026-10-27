@@ -134,7 +134,7 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
       </CardHeader>
 
       <CardContent>
-        <div className="h-[340px] w-full pt-2">
+        <div className="h-[380px] w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
@@ -150,12 +150,21 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
                 tickLine={false}
                 axisLine={false}
                 interval={0}
-                height={38}
+                height={40}
                 tick={({ x, y, payload }) => {
                   const text = String(payload.value || "");
                   const parts = text.split(" (");
                   const datePart = parts[0];
                   const daysPart = parts[1] ? `(${parts[1]}` : "";
+
+                  let line1 = datePart;
+                  let line2 = daysPart;
+                  if (!daysPart && datePart.includes(" ")) {
+                    const spaceIdx = datePart.lastIndexOf(" ");
+                    line1 = datePart.substring(0, spaceIdx);
+                    line2 = datePart.substring(spaceIdx + 1);
+                  }
+
                   return (
                     <g transform={`translate(${x},${y})`}>
                       <text
@@ -167,9 +176,9 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
                         fontSize={10}
                         fontWeight={500}
                       >
-                        {datePart}
+                        {line1}
                       </text>
-                      {daysPart && (
+                      {line2 && (
                         <text
                           x={0}
                           y={0}
@@ -179,7 +188,7 @@ export function ConsumptionChart({ cycleHistory, monthlyNormalized }: Consumptio
                           fontSize={9}
                           fontFamily="monospace"
                         >
-                          {daysPart}
+                          {line2}
                         </text>
                       )}
                     </g>

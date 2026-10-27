@@ -161,14 +161,11 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* Section 1: Core Consumption & Expenditure Trend Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ConsumptionChart
-            cycleHistory={analytics.cycleHistory}
-            monthlyNormalized={analytics.monthlyNormalized}
-          />
-          <ExpenditureChart cycleHistory={analytics.cycleHistory} />
-        </div>
+        {/* Section 1: Full-Width Electricity Consumption & Bill History Chart */}
+        <ConsumptionChart
+          cycleHistory={analytics.cycleHistory}
+          monthlyNormalized={analytics.monthlyNormalized}
+        />
 
         {/* Section 2: Bill Cost Anatomy Breakdown */}
         {analytics.costBreakdown && (
@@ -178,8 +175,9 @@ export default function AnalyticsPage() {
           />
         )}
 
-        {/* Section 3: Tariff Slab Tier & TOD Optimization */}
-        <div className="grid grid-cols-1 gap-6">
+        {/* Section 3: Expenditure Trends & Tariff Slab Tier */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ExpenditureChart cycleHistory={analytics.cycleHistory} />
           <TariffTierCard
             avgUnitsPerCycle={analytics.avgUnitsPerCycle}
             avgUnitsPerMonth={analytics.avgUnitsPerMonth}

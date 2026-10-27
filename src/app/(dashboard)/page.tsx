@@ -228,18 +228,14 @@ function DashboardContent() {
           )
         )}
 
-        {/* Charts Grid */}
+        {/* Charts Section */}
         {analytics && analytics.cycleHistory && analytics.cycleHistory.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <ConsumptionChart
-                cycleHistory={analytics.cycleHistory}
-                monthlyNormalized={analytics.monthlyNormalized}
-              />
-            </div>
-            <div>
-              <TODBreakdownChart todDistribution={analytics.todDistribution} />
-            </div>
+          <div className="space-y-6">
+            <ConsumptionChart
+              cycleHistory={analytics.cycleHistory}
+              monthlyNormalized={analytics.monthlyNormalized}
+            />
+            <TODBreakdownChart todDistribution={analytics.todDistribution} />
           </div>
         ) : (
           !loading && (
