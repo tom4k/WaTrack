@@ -11,8 +11,9 @@ import {
   Flame,
   Clock,
   Layers,
-  Sparkles,
   ShieldCheck,
+  Receipt,
+  PieChart,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ConsumptionChart } from "@/components/analytics/ConsumptionChart";
@@ -64,7 +65,7 @@ export default function AnalyticsPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Deep consumption intelligence, cost component anatomy, and Time-of-Day (TOD) optimization
+              Deep consumption intelligence, cost component anatomy, and Time-of-Day (TOD) zone analysis
             </p>
           </div>
 
@@ -161,23 +162,52 @@ export default function AnalyticsPage() {
           </Card>
         </div>
 
-        {/* Section 1: Full-Width Electricity Consumption & Bill History Chart */}
-        <ConsumptionChart
-          cycleHistory={analytics.cycleHistory}
-          monthlyNormalized={analytics.monthlyNormalized}
-        />
+        {/* Group 1: Consumption & Expenditure Patterns */}
+        <div className="space-y-6">
+          <div className="border-b border-slate-200/70 dark:border-slate-800 pb-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Consumption & Spending Trends</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Historical energy consumption, calendar normalization, and Time-Of-Day meter zone breakdown
+            </p>
+          </div>
 
-        {/* Section 2: Bill Cost Anatomy Breakdown */}
-        {analytics.costBreakdown && (
-          <CostAnatomyCard
-            costBreakdown={analytics.costBreakdown}
-            totalSpent={analytics.totalSpentAllTime}
+          {/* Hero Chart: Full-Width Electricity Consumption & Bill History */}
+          <ConsumptionChart
+            cycleHistory={analytics.cycleHistory}
+            monthlyNormalized={analytics.monthlyNormalized}
           />
-        )}
 
-        {/* Section 3: Expenditure Trends & Tariff Slab Tier */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ExpenditureChart cycleHistory={analytics.cycleHistory} />
+          {/* Secondary Charts: Expenditure Trend & TOD Zone Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <ExpenditureChart cycleHistory={analytics.cycleHistory} />
+            <TODBreakdownChart todDistribution={analytics.todDistribution} />
+          </div>
+        </div>
+
+        {/* Group 2: Tariff Structure & Cost Anatomy */}
+        <div className="space-y-6">
+          <div className="border-b border-slate-200/70 dark:border-slate-800 pb-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Tariff Structure & Cost Anatomy</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Statutory charges distribution and official KSEB LT-1 Domestic slab classification
+            </p>
+          </div>
+
+          {/* Cost Anatomy Breakdown */}
+          {analytics.costBreakdown && (
+            <CostAnatomyCard
+              costBreakdown={analytics.costBreakdown}
+              totalSpent={analytics.totalSpentAllTime}
+            />
+          )}
+
+          {/* KSEB Tariff Ladder & Position */}
           <TariffTierCard
             avgUnitsPerCycle={analytics.avgUnitsPerCycle}
             avgUnitsPerMonth={analytics.avgUnitsPerMonth}
@@ -185,64 +215,23 @@ export default function AnalyticsPage() {
           />
         </div>
 
-        {/* Section 4: Time-Of-Day Distribution & Year-Over-Year Comparison */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <TODBreakdownChart todDistribution={analytics.todDistribution} />
+        {/* Group 3: Historical Records & Ledgers */}
+        <div className="space-y-6">
+          <div className="border-b border-slate-200/70 dark:border-slate-800 pb-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span>Billing History & Ledgers</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Detailed cycle-by-cycle reconciliation ledger and year-over-year annual comparative records
+            </p>
           </div>
-          <div className="lg:col-span-2">
-            <Card className="border-slate-200/80 dark:border-slate-800 h-full flex flex-col justify-between">
-              <CardHeader>
-                <CardTitle>Year-Over-Year Historical Comparison</CardTitle>
-                <CardDescription>
-                  Annual electricity usage, bill counts, and total billing expenditure by calendar year
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-bold uppercase tracking-wider">
-                        <th className="py-2.5 px-3">Year</th>
-                        <th className="py-2.5 px-3 text-right">Bills Count</th>
-                        <th className="py-2.5 px-3 text-right">Total Units</th>
-                        <th className="py-2.5 px-3 text-right">Total Expenditure</th>
-                        <th className="py-2.5 px-3 text-right">Avg Rate</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
-                      {analytics.yearlyComparison.map((y: any) => {
-                        const avgRate = y.units > 0 ? (y.expenditure / y.units).toFixed(2) : "0.00";
-                        return (
-                          <tr key={y.year} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                            <td className="py-3 px-3 font-bold text-sm text-slate-900 dark:text-slate-100 font-sans">
-                              {y.year}
-                            </td>
-                            <td className="py-3 px-3 text-right text-slate-500 font-sans">
-                              {y.billsCount} {y.billsCount === 1 ? "bill" : "bills"}
-                            </td>
-                            <td className="py-3 px-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                              {formatUnits(y.units)}
-                            </td>
-                            <td className="py-3 px-3 text-right font-bold">
-                              {formatINR(y.expenditure)}
-                            </td>
-                            <td className="py-3 px-3 text-right text-slate-600 dark:text-slate-300">
-                              ₹{avgRate} / kWh
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
 
-        {/* Section 5: Detailed Billing Cycle Ledger Table */}
-        <CycleLedgerTable cycleHistory={analytics.cycleHistory} />
+          <CycleLedgerTable
+            cycleHistory={analytics.cycleHistory}
+            yearlyComparison={analytics.yearlyComparison}
+          />
+        </div>
       </div>
     </AppShell>
   );
