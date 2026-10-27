@@ -437,8 +437,8 @@ export function BillDetailsDrawer({
             </div>
           </div>
 
-          {/* Document Attachment & Remarks */}
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-2">
+          {/* Document Attachment */}
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Attached Document
@@ -457,11 +457,6 @@ export function BillDetailsDrawer({
                 <span className="text-xs text-slate-400">No document attached</span>
               )}
             </div>
-            {bill.remarks && (
-              <p className="text-xs text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
-                <span className="font-semibold">Remarks:</span> {bill.remarks}
-              </p>
-            )}
           </div>
 
           {/* Payment History for this Bill */}
