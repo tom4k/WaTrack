@@ -52,8 +52,10 @@ export interface SavedFile {
 }
 
 /**
- * Validates and saves an uploaded file buffer safely to Vercel Blob (production)
- * or local private storage (development fallback).
+ * Validates and saves an uploaded file buffer safely to:
+ * 1. Persistent database (PostgreSQL & SQLite) for 100% serverless durability
+ * 2. Vercel Blob (if token is configured in production)
+ * 3. Local filesystem cache
  */
 export async function saveDocument(file: File): Promise<SavedFile> {
   if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -80,23 +82,42 @@ export async function saveDocument(file: File): Promise<SavedFile> {
 
   const randomId = crypto.randomUUID();
   const filename = `${randomId}${ext}`;
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const dataBase64 = buffer.toString("base64");
 
-  // If Vercel Blob is configured (recommended for production on Vercel)
+  // 1. Save to persistent database (guarantees cross-serverless persistence across all instances)
+  try {
+    const { dbService } = await import("@/db");
+    await dbService.saveDocument({
+      filename,
+      originalName: file.name,
+      mimeType,
+      sizeBytes: file.size,
+      dataBase64,
+    });
+  } catch (dbErr) {
+    console.warn("Could not save document record to database:", dbErr);
+  }
+
+  // 2. If Vercel Blob is configured (recommended for production on Vercel)
   const blobToken = getBlobToken();
   if (blobToken) {
     try {
       let blob;
       try {
-        blob = await put(`bills/${filename}`, file, {
+        blob = await put(`bills/${filename}`, buffer, {
           access: "public",
           token: blobToken,
           addRandomSuffix: false,
+          contentType: mimeType,
         });
       } catch {
-        blob = await put(`bills/${filename}`, file, {
+        blob = await put(`bills/${filename}`, buffer, {
           access: "private",
           token: blobToken,
           addRandomSuffix: false,
+          contentType: mimeType,
         });
       }
 
@@ -109,46 +130,41 @@ export async function saveDocument(file: File): Promise<SavedFile> {
         };
       }
     } catch (blobErr) {
-      console.warn("Vercel blob upload failed, falling back to local storage:", blobErr);
+      console.warn("Vercel blob upload failed, falling back to database persistence:", blobErr);
     }
   }
 
-  // Fallback to local filesystem for development / serverless temp storage
+  // 3. Fallback / local filesystem cache
   const uploadsDir = getLocalUploadsDir();
   try {
     await fs.mkdir(uploadsDir, { recursive: true });
     const targetPath = path.join(uploadsDir, filename);
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
     await fs.writeFile(targetPath, buffer);
-
-    return {
-      storedFilename: filename,
-      originalFilename: file.name,
-      mimeType,
-      sizeBytes: file.size,
-    };
   } catch (fsErr) {
-    console.warn("Local storage write failed, persisting record without physical file:", fsErr);
-    return {
-      storedFilename: filename,
-      originalFilename: file.name,
-      mimeType,
-      sizeBytes: file.size,
-    };
+    // Non-fatal if filesystem is read-only
   }
+
+  return {
+    storedFilename: filename,
+    originalFilename: file.name,
+    mimeType,
+    sizeBytes: file.size,
+  };
 }
 
 /**
- * Retrieves a document from private storage or cloud blob safely
+ * Retrieves a document from cloud blob, persistent database, or local storage
  */
-export async function getDocument(storedFilename: string): Promise<{
+export async function getDocument(
+  storedFilename: string,
+  billId?: string
+): Promise<{
   buffer: Buffer;
   exists: boolean;
   contentType?: string;
+  originalName?: string;
 }> {
-  // If stored as a remote cloud blob URL or pathname
+  // 1. If stored as a remote cloud blob URL or pathname
   if (
     storedFilename.startsWith("http://") ||
     storedFilename.startsWith("https://") ||
@@ -191,26 +207,62 @@ export async function getDocument(storedFilename: string): Promise<{
         };
       }
     } catch {
-      // Ignore
+      // Fall through to database / local check
+    }
+  }
+
+  const sanitized = path.basename(storedFilename.split("?")[0]);
+
+  // 2. Check local filesystem cache
+  try {
+    const dir = getLocalUploadsDir();
+    const filePath = path.join(dir, sanitized);
+    if (fsSync.existsSync(filePath)) {
+      const buffer = await fs.readFile(filePath);
+      return { buffer, exists: true };
     }
 
-    return { buffer: Buffer.from([]), exists: false };
+    const tmpPath = path.join(TMP_UPLOADS_DIR, sanitized);
+    if (fsSync.existsSync(tmpPath)) {
+      const buffer = await fs.readFile(tmpPath);
+      return { buffer, exists: true };
+    }
+  } catch {
+    // Continue to database
   }
 
-  // Local filesystem fallback
-  const sanitized = path.basename(storedFilename);
-  const dir = getLocalUploadsDir();
-  const filePath = path.join(dir, sanitized);
+  // 3. Check persistent database
+  try {
+    const { dbService } = await import("@/db");
+    const doc = await dbService.getDocument(sanitized);
+    if (doc && doc.dataBase64) {
+      const buffer = Buffer.from(doc.dataBase64, "base64");
+      return {
+        buffer,
+        exists: true,
+        contentType: doc.mimeType || undefined,
+        originalName: doc.originalName || undefined,
+      };
+    }
 
-  if (fsSync.existsSync(filePath)) {
-    const buffer = await fs.readFile(filePath);
-    return { buffer, exists: true };
-  }
-
-  const tmpPath = path.join(TMP_UPLOADS_DIR, sanitized);
-  if (fsSync.existsSync(tmpPath)) {
-    const buffer = await fs.readFile(tmpPath);
-    return { buffer, exists: true };
+    // 4. If billId was passed, check bill record for possible documentPath
+    if (billId) {
+      const bill = await dbService.getBillById(billId);
+      if (bill?.documentPath && bill.documentPath !== storedFilename) {
+        const docFromBill = await dbService.getDocument(bill.documentPath);
+        if (docFromBill && docFromBill.dataBase64) {
+          const buffer = Buffer.from(docFromBill.dataBase64, "base64");
+          return {
+            buffer,
+            exists: true,
+            contentType: docFromBill.mimeType || undefined,
+            originalName: docFromBill.originalName || undefined,
+          };
+        }
+      }
+    }
+  } catch (dbErr) {
+    console.error("Database document fetch failed:", dbErr);
   }
 
   return { buffer: Buffer.from([]), exists: false };
@@ -220,26 +272,39 @@ export async function getDocument(storedFilename: string): Promise<{
  * Deletes a document if it exists
  */
 export async function deleteDocument(storedFilename: string): Promise<boolean> {
+  const sanitized = path.basename(storedFilename.split("?")[0]);
+
+  // 1. Remote blob
   if (storedFilename.startsWith("http://") || storedFilename.startsWith("https://")) {
     try {
       const blobToken = getBlobToken();
       await del(storedFilename, blobToken ? { token: blobToken } : undefined);
-      return true;
     } catch {
-      return false;
+      // Ignore
     }
   }
 
+  // 2. Database
   try {
-    const sanitized = path.basename(storedFilename);
+    const { dbService } = await import("@/db");
+    await dbService.deleteDocument(sanitized);
+  } catch {
+    // Ignore
+  }
+
+  // 3. Local filesystem
+  try {
     const dir = getLocalUploadsDir();
     const filePath = path.join(dir, sanitized);
     if (fsSync.existsSync(filePath)) {
       await fs.unlink(filePath);
-      return true;
     }
+    const tmpPath = path.join(TMP_UPLOADS_DIR, sanitized);
+    if (fsSync.existsSync(tmpPath)) {
+      await fs.unlink(tmpPath);
+    }
+    return true;
   } catch {
-    // Ignore error
+    return false;
   }
-  return false;
 }

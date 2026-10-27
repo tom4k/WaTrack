@@ -152,6 +152,17 @@ async function ensurePgSchema(): Promise<void> {
           gemini_api_key TEXT,
           updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          filename TEXT UNIQUE NOT NULL,
+          original_name TEXT,
+          mime_type TEXT,
+          size_bytes BIGINT,
+          data_base64 TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
         ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS gemini_api_key TEXT;
         ALTER TABLE bills ADD COLUMN IF NOT EXISTS used_units_normal TEXT;
         ALTER TABLE bills ADD COLUMN IF NOT EXISTS used_units_off_peak TEXT;
@@ -293,6 +304,16 @@ function getSqliteDb(): DatabaseSync {
       due_reminder_days INTEGER DEFAULT 5 NOT NULL,
       gemini_api_key TEXT,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      filename TEXT UNIQUE NOT NULL,
+      original_name TEXT,
+      mime_type TEXT,
+      size_bytes INTEGER,
+      data_base64 TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
   `);
 
@@ -1058,6 +1079,60 @@ export const dbService = {
       current.id
     ]);
     return this.getSettings();
+  },
+
+  // --- DOCUMENTS ---
+  async saveDocument(doc: {
+    id?: string;
+    filename: string;
+    originalName?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+    dataBase64: string;
+  }) {
+    const id = doc.id || `doc-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const now = new Date().toISOString();
+    await dbExecute(`
+      INSERT INTO documents (id, filename, original_name, mime_type, size_bytes, data_base64, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (filename) DO UPDATE SET
+        original_name = excluded.original_name,
+        mime_type = excluded.mime_type,
+        size_bytes = excluded.size_bytes,
+        data_base64 = excluded.data_base64
+    `, [
+      id,
+      doc.filename,
+      doc.originalName ?? null,
+      doc.mimeType ?? null,
+      doc.sizeBytes ?? null,
+      doc.dataBase64,
+      now,
+    ]);
+    return { id, filename: doc.filename };
+  },
+
+  async getDocument(filename: string) {
+    const row = await dbQueryOne<any>(`
+      SELECT id, filename, original_name, mime_type, size_bytes, data_base64, created_at
+      FROM documents
+      WHERE filename = ? OR original_name = ?
+      LIMIT 1
+    `, [filename, filename]);
+    if (!row) return null;
+    return {
+      id: row.id,
+      filename: row.filename,
+      originalName: row.original_name,
+      mimeType: row.mime_type,
+      sizeBytes: Number(row.size_bytes || 0),
+      dataBase64: row.data_base64,
+      createdAt: row.created_at,
+    };
+  },
+
+  async deleteDocument(filename: string) {
+    await dbExecute(`DELETE FROM documents WHERE filename = ?`, [filename]);
   },
 
   // --- SEED OR RESET ---

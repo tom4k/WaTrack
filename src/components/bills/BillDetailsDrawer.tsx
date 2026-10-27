@@ -14,6 +14,8 @@ import {
   Zap,
   CheckCircle2,
   Receipt,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,39 @@ export function BillDetailsDrawer({
   const [bill, setBill] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !bill) return;
+
+    setUploadingDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`/api/bills/${bill.id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to upload document");
+      }
+
+      const data = await res.json();
+      if (data.bill) {
+        setBill(data.bill);
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message || "Failed to upload attachment");
+    } finally {
+      setUploadingDoc(false);
+      e.target.value = "";
+    }
+  };
   const [isThermalOpen, setIsThermalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -439,23 +474,43 @@ export function BillDetailsDrawer({
 
           {/* Document Attachment */}
           <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Attached Document
               </span>
-              {bill.documentPath ? (
-                <a
-                  href={`/api/documents/${encodeURIComponent(bill.documentPath)}?name=${encodeURIComponent(
-                    bill.documentOriginalName || "KSEB_Bill.pdf"
-                  )}&download=true`}
-                  className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Download ({bill.documentOriginalName || "Attached PDF"})
-                </a>
-              ) : (
-                <span className="text-xs text-slate-400">No document attached</span>
-              )}
+              <div className="flex items-center gap-3">
+                {bill.documentPath ? (
+                  <a
+                    href={`/api/documents/${encodeURIComponent(bill.documentPath)}?name=${encodeURIComponent(
+                      bill.documentOriginalName || "KSEB_Bill.pdf"
+                    )}&billId=${encodeURIComponent(bill.id)}&download=true`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download ({bill.documentOriginalName || "Attached PDF"})
+                  </a>
+                ) : (
+                  <span className="text-xs text-slate-400">No document attached</span>
+                )}
+
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer font-medium px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs">
+                  {uploadingDoc ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-500" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5 text-slate-400" />
+                  )}
+                  <span>{uploadingDoc ? "Saving..." : bill.documentPath ? "Replace" : "Upload File"}</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingDoc}
+                    onChange={handleDocumentUpload}
+                  />
+                </label>
+              </div>
             </div>
           </div>
 

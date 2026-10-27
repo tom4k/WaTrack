@@ -133,6 +133,16 @@ export const billsRelations = relations(bills, ({ one, many }) => ({
   payments: many(payments),
 }));
 
+export const documents = pgTable("documents", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  filename: varchar("filename", { length: 255 }).notNull().unique(),
+  originalName: text("original_name"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  sizeBytes: integer("size_bytes"),
+  dataBase64: text("data_base64").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const paymentsRelations = relations(payments, ({ one }) => ({
   bill: one(bills, {
     fields: [payments.billId],
@@ -149,3 +159,5 @@ export type NewBill = typeof bills.$inferInsert;
 export type Payment = typeof payments.$inferSelect;
 export type NewPayment = typeof payments.$inferInsert;
 export type AppSettings = typeof appSettings.$inferSelect;
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
